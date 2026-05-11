@@ -167,8 +167,11 @@ class HomePageView(TemplateView):
     def _month_revenue(self, today):
         monthly_orders = (
             Order.objects.prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('raised_bed')))
-            .filter(ordered_at__year=today.year, ordered_at__month=today.month)
-            .exclude(status=Order.Status.CANCELLED)
+            .filter(
+                status=Order.Status.PICKED_UP,
+                pickup_at__year=today.year,
+                pickup_at__month=today.month,
+            )
         )
         return sum((order.total_price for order in monthly_orders), start=0)
 
