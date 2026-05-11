@@ -1,0 +1,166 @@
+{% extends 'home/base.html' %}
+{% load static %}
+
+{% block title %}Nová objednávka | Evidence záhonů{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'home/css/order_form.css' %}">
+    <link rel="stylesheet" href="{% static 'home/css/modals.css' %}">
+{% endblock %}
+
+{% block body_class %}page-order-form{% endblock %}
+
+{% block content %}
+    <section class="page-heading mb-3">
+        <div>
+            <h1>Nová objednávka</h1>
+        </div>
+    </section>
+
+    <form method="post" class="order-layout order-form-layout" id="order-create-form" data-customer-modal-url="{% url 'home:customer-modal-create' %}" data-raised-bed-modal-url="{% url 'home:raised-bed-modal-create' %}">
+        {% csrf_token %}
+
+        <section class="order-main-column">
+            <div class="form-section app-panel">
+                <div class="section-header">
+                    <div>
+                        <div class="section-label">Zákazník</div>
+                        <h2>Komu objednávka patří</h2>
+                    </div>
+                    <button type="button" class="button button-ghost" data-modal-open="customer-modal">Přidat zákazníka</button>
+                </div>
+                <div class="field-grid field-grid-customer">
+                    <div class="field-group field-group-wide{% if order_form.customer.errors %} has-error{% endif %}">
+                        <label for="{{ order_form.customer.id_for_label }}">{{ order_form.customer.label }}</label>
+                        <div class="input-with-action">
+                            {{ order_form.customer }}
+                            <button type="button" class="button button-secondary button-inline" data-modal-open="customer-modal">Nový zákazník</button>
+                        </div>
+                        {% for error in order_form.customer.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section app-panel">
+                <div class="section-header">
+                    <div>
+                        <div class="section-label">Termíny a stav</div>
+                        <h2>Kdy bylo objednáno a kdy se vyzvedává</h2>
+                    </div>
+                </div>
+                <div class="field-grid">
+                    <div class="field-group{% if order_form.ordered_at.errors %} has-error{% endif %}">
+                        <label for="{{ order_form.ordered_at.id_for_label }}">{{ order_form.ordered_at.label }}</label>
+                        {{ order_form.ordered_at }}
+                        {% for error in order_form.ordered_at.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field-group{% if order_form.pickup_at.errors %} has-error{% endif %}">
+                        <label for="{{ order_form.pickup_at.id_for_label }}">{{ order_form.pickup_at.label }}</label>
+                        {{ order_form.pickup_at }}
+                        {% for error in order_form.pickup_at.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field-group{% if order_form.status.errors %} has-error{% endif %}">
+                        <label for="{{ order_form.status.id_for_label }}">{{ order_form.status.label }}</label>
+                        {{ order_form.status }}
+                        {% for error in order_form.status.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field-group field-group-wide{% if order_form.note.errors %} has-error{% endif %}">
+                        <label for="{{ order_form.note.id_for_label }}">{{ order_form.note.label }}</label>
+                        {{ order_form.note }}
+                        {% for error in order_form.note.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section app-panel">
+                <div class="section-header">
+                    <div>
+                        <div class="section-label">Položky objednávky</div>
+                        <h2>Jaké záhony a v jakém množství</h2>
+                    </div>
+                    <div class="section-actions">
+                        <button type="button" class="button button-secondary" data-modal-open="raised-bed-modal">Přidat záhon</button>
+                        <button type="button" class="button button-primary" data-modal-open="order-item-modal">Přidat položku</button>
+                    </div>
+                </div>
+
+                {% if item_formset.non_form_errors %}
+                    <div class="form-error-box">
+                        {% for error in item_formset.non_form_errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% if item_formset.errors %}
+                    <div class="form-error-box">
+                        {% for form in item_formset.forms %}
+                            {% if form.errors %}
+                                <p>Položka {{ forloop.counter }} obsahuje chyby.</p>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <div id="order-items-empty" class="empty-items{% if item_rows %} is-hidden{% endif %}">
+                    Zatím není přidaná žádná položka. Otevři modal a přidej první záhon.
+                </div>
+
+                <div id="order-items-summary" class="items-summary-list"></div>
+
+                {{ item_formset.management_form }}
+                <div id="order-items-storage" class="visually-hidden">
+                    {% for form in item_formset.forms %}
+                        <div class="stored-item-row" data-order-item data-form-index="{{ forloop.counter0 }}">
+                            {{ form.id }}
+                            {{ form.raised_bed }}
+                            {{ form.quantity }}
+                            {{ form.unit_price }}
+                            {{ form.DELETE }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <aside class="order-sidebar-column">
+            <section class="form-section app-panel summary-panel">
+                <div class="section-label">Souhrn</div>
+                <h2>Přehled před uložením</h2>
+                <div class="summary-list">
+                    <div class="summary-row">
+                        <span>Zákazník</span>
+                        <strong id="summary-customer">{{ selected_customer_label|default:'Nevybrán' }}</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>Stav</span>
+                        <strong id="summary-status">{{ selected_status_label|default:'Objednáno' }}</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>Vyzvednutí</span>
+                        <strong id="summary-pickup">{{ selected_pickup_display|default:'Bez termínu' }}</strong>
+                    </div>
+                    <div class="summary-row summary-row-total">
+                        <span>Celkem</span>
+                        <strong id="summary-total">{{ summary_total }} Kč</strong>
+                    </div>
+                </div>
+                <div class="summary-items-block">
+                    <div class="section-label">Položky</div>
+                    <div id="summary-items-empty" class="empty-items{% if item_rows %} is-hidden{% endif %}">Položky se objeví po přidání.</div>
+                    <div id="summary-items-list" class="summary-list summary-items-list"></div>
+                </div>
+                <button type="submit" class="button button-primary button-block">Uložit objednávku</button>
+            </section>
+        </aside>
+    </form>
+
+    {{ beds_payload|json_script:'beds-payload' }}
+    {% include 'home/modals/customer_modal.html' %}
+    {% include 'home/modals/raised_bed_modal.html' %}
+    {% include 'home/modals/order_item_modal.html' %}
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'home/js/order_form.js' %}"></script>
+{% endblock %}

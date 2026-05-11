@@ -1,0 +1,119 @@
+{% extends 'home/base.html' %}
+{% load static %}
+
+{% block title %}Přehled objednávek | Evidence záhonů{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'home/css/order_list.css' %}">
+{% endblock %}
+
+{% block body_class %}page-order-list{% endblock %}
+
+{% block content %}
+    <section class="page-heading mb-3">
+        <div>
+            <h1>Přehled zakázek</h1>
+        </div>
+    </section>
+
+    <div class="order-list-shell">
+    <section class="filters-toolbar filters-panel app-panel">
+        <form method="get" class="filters-toolbar-form filters-form">
+            <div class="filter-field">
+                <label for="filter-q" class="form-label">Hledat</label>
+                <input id="filter-q" class="form-control" type="text" name="q" value="{{ search_query }}" placeholder="Jméno, telefon, město, záhon">
+            </div>
+            <div class="filter-field">
+                <label for="filter-status" class="form-label">Stav</label>
+                <select id="filter-status" class="form-select" name="status">
+                    <option value="">Všechny stavy</option>
+                    {% for value, label in status_options %}
+                        <option value="{{ value }}"{% if value == selected_status %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-city" class="form-label">Město</label>
+                <select id="filter-city" class="form-select" name="city">
+                    <option value="">Všechna města</option>
+                    {% for city in city_options %}
+                        <option value="{{ city }}"{% if city == selected_city %} selected{% endif %}>{{ city }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filter-sort" class="form-label">Seřazení</label>
+                <select id="filter-sort" class="form-select" name="sort">
+                    {% for value, label in sort_options %}
+                        <option value="{{ value }}"{% if value == selected_sort %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="button button-primary">Použít</button>
+                <a href="{% url 'home:order-list' %}" class="button button-ghost">Reset</a>
+            </div>
+        </form>
+    </section>
+
+    <section class="results-summary overview-metrics">
+        <div class="metric-card"><span class="metric-label">Celkem</span><strong class="metric-value">{{ total_orders }}</strong></div>
+        <div class="metric-card"><span class="metric-label">K vyřízení</span><strong class="metric-value">{{ open_orders }}</strong></div>
+        <div class="metric-card"><span class="metric-label">S termínem</span><strong class="metric-value">{{ orders_with_pickup }}</strong></div>
+        <div class="metric-card"><span class="metric-label">Bez termínu</span><strong class="metric-value">{{ orders_without_pickup }}</strong></div>
+    </section>
+
+    {% if orders %}
+        <section class="orders-table-shell orders-panel app-panel">
+            <div class="table-shell">
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Zákazník</th>
+                            <th>Stav</th>
+                            <th>Objednáno</th>
+                            <th>Vyzvednutí</th>
+                            <th>Město</th>
+                            <th>Položky</th>
+                            <th>Cena</th>
+                            <th>Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                            <tr>
+                                <td data-label="ID">#{{ order.id }}</td>
+                                <td data-label="Zákazník">
+                                    <div class="customer-cell">
+                                        <strong>{{ order.customer.display_name }}</strong>
+                                        {% if order.customer.phone %}<small>{{ order.customer.phone }}</small>{% endif %}
+                                    </div>
+                                </td>
+                                <td data-label="Stav"><span class="status-pill status-{{ order.status }}">{{ order.get_status_display }}</span></td>
+                                <td data-label="Objednáno"><span class="order-date">{{ order.ordered_at|date:"j. n. Y H:i" }}</span></td>
+                                <td data-label="Vyzvednutí">{% if order.pickup_at %}<span class="order-date">{{ order.pickup_at|date:"j. n. Y H:i" }}</span>{% else %}<span class="text-muted">Bez termínu</span>{% endif %}</td>
+                                <td data-label="Město">{% if order.customer.city %}{{ order.customer.city }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                                <td data-label="Položky">
+                                    <div class="order-items-list">
+                                        {% for item in order.items.all %}
+                                            <div>{{ item.raised_bed.name }} / {{ item.quantity }} ks</div>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td data-label="Cena"><strong>{{ order.total_price }} Kč</strong></td>
+                                <td data-label="Akce"><a class="table-link" href="/admin/home/order/{{ order.id }}/change/">Detail</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    {% else %}
+        <div class="empty-results empty-state app-panel">
+            <h2>Žádné zakázky neodpovídají filtru</h2>
+            <p>Uprav filtry nebo zkus reset přehledu.</p>
+        </div>
+    {% endif %}
+    </div>
+{% endblock %}

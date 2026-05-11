@@ -1,0 +1,27 @@
+<div class="modal" id="order-item-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-close></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="order-item-modal-title">
+        <div class="modal-header">
+            <div>
+                <div class="section-label">Nová položka</div>
+                <h3 id="order-item-modal-title">Přidání položky objednávky</h3>
+            </div>
+            <button type="button" class="modal-close" data-modal-close>&times;</button>
+        </div>
+        <form method="post" class="modal-form" id="order-item-modal-form">
+            <div class="modal-errors" data-modal-errors></div>
+            <div class="field-grid">
+                {% for field in item_modal_form %}
+                    <div class="field-group{% if field.errors %} has-error{% endif %}">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                    </div>
+                {% endfor %}
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="button button-secondary" data-modal-close>Zavřít</button>
+                <button type="submit" class="button button-primary">Přidat položku</button>
+            </div>
+        </form>
+    </div>
+</div>

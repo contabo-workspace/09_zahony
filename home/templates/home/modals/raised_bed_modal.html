@@ -1,0 +1,28 @@
+<div class="modal" id="raised-bed-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-close></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="raised-bed-modal-title">
+        <div class="modal-header">
+            <div>
+                <div class="section-label">Nový záhon</div>
+                <h3 id="raised-bed-modal-title">Přidání typu záhonu</h3>
+            </div>
+            <button type="button" class="modal-close" data-modal-close>&times;</button>
+        </div>
+        <form method="post" class="modal-form" id="raised-bed-modal-form" action="{% url 'home:raised-bed-modal-create' %}">
+            {% csrf_token %}
+            <div class="modal-errors" data-modal-errors></div>
+            <div class="field-grid">
+                {% for field in raised_bed_form %}
+                    <div class="field-group{% if field.errors %} has-error{% endif %}">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                    </div>
+                {% endfor %}
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="button button-secondary" data-modal-close>Zavřít</button>
+                <button type="submit" class="button button-primary">Uložit záhon</button>
+            </div>
+        </form>
+    </div>
+</div>

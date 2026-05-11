@@ -1,0 +1,99 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(61, 40, 24, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: none;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.modal.is-open {
+  display: block;
+}
+
+.modal-dialog {
+  width: min(100%, 560px);
+  margin: 4vh auto;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 253, 249, 1), rgba(255, 246, 235, 0.98));
+  border: 1px solid rgba(185, 150, 114, 0.55);
+  box-shadow: 0 28px 64px rgba(61, 40, 24, 0.22);
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0;
+}
+
+.modal-title {
+  margin: 0;
+  font-family: 'Fraunces', serif;
+  font-size: 1.45rem;
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  background: rgba(255, 248, 239, 0.95);
+  border: 1px solid rgba(219, 199, 175, 0.8);
+  color: var(--text-soft);
+}
+
+.modal-body,
+.modal-form {
+  padding: 1rem;
+}
+
+.modal-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.modal-errors {
+  padding: 0.8rem 1rem 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  padding-top: 0.3rem;
+  flex-wrap: wrap;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .modal {
+    padding: 0.6rem;
+  }
+
+  .modal-dialog {
+    margin: 1vh auto;
+    border-radius: 24px;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-form {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+}

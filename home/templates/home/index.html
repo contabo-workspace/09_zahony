@@ -1,83 +1,82 @@
-<!DOCTYPE html>
-<html lang="cs">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>zahony</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: #e2e8f0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            text-align: center;
-            max-width: 600px;
-            padding: 3rem 2rem;
-        }
-        h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(90deg, #38bdf8, #818cf8);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            color: transparent;
-        }
-        .subtitle {
-            color: #94a3b8;
-            font-size: 1.1rem;
-            margin-bottom: 2rem;
-        }
-        .status {
-            display: inline-block;
-            background: #065f46;
-            color: #6ee7b7;
-            padding: 0.4rem 1rem;
-            border-radius: 2rem;
-            font-size: 0.9rem;
-            margin-bottom: 2rem;
-        }
-        .links {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        .links a {
-            display: inline-block;
-            padding: 0.8rem 1.5rem;
-            border-radius: 0.5rem;
-            text-decoration: none;
-            font-weight: 600;
-            transition: transform 0.15s, box-shadow 0.15s;
-        }
-        .links a:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-        .btn-primary { background: #3b82f6; color: #fff; }
-        .btn-secondary { background: #334155; color: #e2e8f0; border: 1px solid #475569; }
-        .info {
-            margin-top: 2.5rem;
-            color: #64748b;
-            font-size: 0.85rem;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>zahony</h1>
-        <p class="subtitle">zahony.hs-dev.cz</p>
-        <div class="status">&#x2713; Projekt úspěšně nasazen</div>
-        <div class="links">
-            <a href="/admin/" class="btn-primary">Administrace</a>
-            <a href="https://docs.djangoproject.com/" class="btn-secondary" target="_blank">Django dokumentace</a>
-        </div>
-        <p class="info">Tato stránka je součást home appky &mdash; můžete ji upravit v <code>home/templates/home/index.html</code></p>
-    </div>
-</body>
-</html>
+{% extends 'home/base.html' %}
+{% load static %}
+
+{% block title %}Kalendář zakázek | Evidence záhonů{% endblock %}
+
+{% block extra_css %}
+	<link rel="stylesheet" href="{% static 'home/css/index.css' %}">
+{% endblock %}
+
+{% block body_class %}page-home{% endblock %}
+
+{% block content %}
+	<section class="page-heading page-heading-calendar">
+		<div>
+			<h1>Kalendář</h1>
+		</div>
+		<div class="overview-metrics overview-metrics-compact">
+			{% for metric in overview_metrics %}
+				<div class="metric-chip">
+					<span class="metric-label">{{ metric.label }}</span>
+					<strong class="metric-value">{{ metric.count }}</strong>
+				</div>
+			{% endfor %}
+		</div>
+	</section>
+
+	<section class="calendar-shell app-panel">
+		<div class="calendar-head">
+			<h2>{{ current_month|date:"F Y" }}</h2>
+			<div class="month-nav">
+				<a href="?year={{ previous_month.year }}&month={{ previous_month.month }}" class="button button-ghost">Předchozí měsíc</a>
+				<a href="?year={{ next_month.year }}&month={{ next_month.month }}" class="button button-ghost">Další měsíc</a>
+			</div>
+		</div>
+
+		<div class="calendar-matrix-shell">
+			<table class="calendar-matrix">
+				<colgroup>
+					<col class="day-column-col">
+					{% for slot in time_slots %}
+						<col class="time-column{% if slot.has_entries %} has-entries{% else %} is-empty{% endif %}" style="width: {{ slot.width_rem }}rem;">
+					{% endfor %}
+				</colgroup>
+				<thead>
+					<tr>
+						<th class="day-column">Den</th>
+						{% for slot in time_slots %}
+							<th>{{ slot.label }}</th>
+						{% endfor %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for day in calendar_days %}
+						<tr class="calendar-row{% if day.is_today %} is-today{% endif %}{% if not day.has_content %} is-empty{% endif %}">
+							<th scope="row" class="calendar-day-label">
+								<strong>{{ day.date.day }}.</strong>
+								<span>{{ day.weekday_label }}</span>
+							</th>
+							{% for cell in day.hourly_cells %}
+								<td class="calendar-slot{% if cell.entries %} has-entry{% else %} is-empty{% endif %}">
+									<div class="calendar-slot-stack">
+									{% for entry in cell.entries %}
+										<article class="calendar-entry status-{{ entry.status_code }}">
+											<div class="calendar-entry-meta">{{ entry.meta_label }} {{ entry.meta_time }}</div>
+											<div class="calendar-entry-facebook">{{ entry.facebook_nickname }}</div>
+											<div class="calendar-entry-name">{{ entry.customer_name }}</div>
+											<div class="calendar-entry-summary">
+												<span>{{ entry.item_count }} ks</span>
+												<strong>{{ entry.total_price }}</strong>
+											</div>
+										</article>
+									{% endfor %}
+									</div>
+								</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+{% endblock %}
