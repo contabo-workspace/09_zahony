@@ -10,13 +10,25 @@
         </div>
         <form method="post" class="modal-form" id="order-item-modal-form">
             <div class="modal-errors" data-modal-errors></div>
-            <div class="field-grid">
-                {% for field in item_modal_form %}
-                    <div class="field-group{% if field.errors %} has-error{% endif %}">
-                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
+            <div class="field-grid modal-field-grid-order-item">
+                <div class="field-group field-group-wide{% if item_modal_form.raised_bed.errors %} has-error{% endif %}">
+                    <label for="{{ item_modal_form.raised_bed.id_for_label }}">{{ item_modal_form.raised_bed.label }}</label>
+                    <div class="input-with-action input-with-action-inline input-with-action-compact">
+                        {{ item_modal_form.raised_bed }}
+                        <button type="button" class="button button-secondary button-nowrap" data-open-raised-bed-from-item>Přidat záhon</button>
                     </div>
-                {% endfor %}
+                </div>
+                <div class="field-group{% if item_modal_form.quantity.errors %} has-error{% endif %}">
+                    <label for="{{ item_modal_form.quantity.id_for_label }}">{{ item_modal_form.quantity.label }}</label>
+                    <div class="input-with-suffix">
+                        {{ item_modal_form.quantity }}
+                        <span class="input-suffix">ks</span>
+                    </div>
+                </div>
+                <div class="field-group{% if item_modal_form.unit_price.errors %} has-error{% endif %}">
+                    <label for="{{ item_modal_form.unit_price.id_for_label }}">{{ item_modal_form.unit_price.label }}</label>
+                    {{ item_modal_form.unit_price }}
+                </div>
             </div>
             <div class="modal-actions">
                 <button type="button" class="button button-secondary" data-modal-close>Zavřít</button>

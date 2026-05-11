@@ -1,0 +1,101 @@
+<div class="modal is-open" id="order-edit-modal" aria-hidden="false">
+    <div class="modal-backdrop" data-order-edit-close></div>
+    <div class="modal-dialog modal-dialog-order-edit" role="dialog" aria-modal="true" aria-labelledby="order-edit-modal-title">
+        <div class="modal-header">
+            <div>
+                <div class="section-label">Objednávka #{{ order.id }}</div>
+                <h3 id="order-edit-modal-title" class="modal-title">Úprava objednávky</h3>
+            </div>
+            <button type="button" class="modal-close" data-order-edit-close>&times;</button>
+        </div>
+        <form method="post" class="modal-form" id="order-edit-modal-form" action="{% url 'home:order-modal-update' order.id %}">
+            {% csrf_token %}
+            <div class="modal-errors" data-modal-errors></div>
+            <div class="field-grid modal-field-grid-order-edit">
+                <div class="field-group field-group-wide{% if order_edit_form.customer.errors %} has-error{% endif %}">
+                    <label for="{{ order_edit_form.customer.id_for_label }}">{{ order_edit_form.customer.label }}</label>
+                    {{ order_edit_form.customer }}
+                </div>
+                <div class="schedule-group">
+                    <div class="field-group-title">Objednávka</div>
+                    <div class="schedule-group-fields schedule-group-fields-inline">
+                        <div class="field-group{% if order_edit_form.ordered_date.errors %} has-error{% endif %}">
+                            {{ order_edit_form.ordered_date }}
+                        </div>
+                        <div class="field-group{% if order_edit_form.ordered_time.errors %} has-error{% endif %}">
+                            {{ order_edit_form.ordered_time }}
+                        </div>
+                    </div>
+                </div>
+                <div class="schedule-group">
+                    <div class="field-group-title">Vyzvednutí</div>
+                    <div class="schedule-group-fields schedule-group-fields-inline">
+                        <div class="field-group{% if order_edit_form.pickup_date.errors %} has-error{% endif %}">
+                            {{ order_edit_form.pickup_date }}
+                        </div>
+                        <div class="field-group{% if order_edit_form.pickup_time.errors %} has-error{% endif %}">
+                            {{ order_edit_form.pickup_time }}
+                        </div>
+                    </div>
+                </div>
+                <div class="field-group{% if order_edit_form.status.errors %} has-error{% endif %}">
+                    <label for="{{ order_edit_form.status.id_for_label }}">{{ order_edit_form.status.label }}</label>
+                    {{ order_edit_form.status }}
+                </div>
+                <div class="field-group field-group-wide{% if order_edit_form.note.errors %} has-error{% endif %}">
+                    <label for="{{ order_edit_form.note.id_for_label }}">{{ order_edit_form.note.label }}</label>
+                    {{ order_edit_form.note }}
+                </div>
+                <div class="field-group field-group-wide order-edit-items-preview">
+                    <div class="section-header section-header-compact">
+                        <div>
+                            <div class="field-group-title">Položky objednávky</div>
+                        </div>
+                        <div class="section-actions">
+                            <button type="button" class="button button-primary button-small" data-open-order-item-modal>Přidat položku</button>
+                        </div>
+                    </div>
+
+                    {% if order_item_formset.non_form_errors %}
+                        <div class="form-error-box" id="order-edit-items-min-error">
+                            {% for error in order_item_formset.non_form_errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% if order_item_formset.errors %}
+                        <div class="form-error-box">
+                            {% for form in order_item_formset.forms %}
+                                {% if form.errors and not form.cleaned_data.DELETE %}
+                                    <p>Položka {{ forloop.counter }} obsahuje chyby.</p>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div id="order-edit-items-empty" class="empty-items{% if order_items or order_item_formset.non_form_errors %} is-hidden{% endif %}">Objednávka zatím nemá žádné položky.</div>
+                    <div id="order-edit-items-list" class="items-summary-list"></div>
+
+                    {{ order_item_formset.management_form }}
+                    <div id="order-edit-items-storage" class="visually-hidden">
+                        {% for item_form in order_item_formset.forms %}
+                            <div class="stored-item-row" data-order-item data-form-index="{{ forloop.counter0 }}">
+                                {{ item_form.id }}
+                                {{ item_form.raised_bed }}
+                                {{ item_form.quantity }}
+                                {{ item_form.unit_price }}
+                                {{ item_form.DELETE }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="button button-secondary" data-order-edit-close>Zavřít</button>
+                <button type="submit" class="button button-primary">Uložit</button>
+            </div>
+        </form>
+    </div>
+    {% include 'home/modals/order_edit_item_modal.html' %}
+</div>

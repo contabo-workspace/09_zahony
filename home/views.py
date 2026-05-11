@@ -1,199 +1,187 @@
-import calendar
-from datetime import date
+from datetime import timedelta
 
 from django.contrib import messages
-from django.db.models import Count, F, Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import JsonResponse
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
 
-from .forms import CustomerForm, OrderForm, OrderItemForm, OrderItemFormSet, RaisedBedForm
+from .forms import CustomerForm, OrderForm, OrderItemForm, OrderItemFormSet, RaisedBedForm, format_czech_date
 from .models import Customer, Order, OrderItem, RaisedBed
 
 
 class HomePageView(TemplateView):
     template_name = 'home/index.html'
-    timeline_start_hour = 7
-    timeline_end_hour = 20
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         today = timezone.localdate()
-        year = self._parse_int(self.request.GET.get('year'), today.year)
-        month = self._parse_int(self.request.GET.get('month'), today.month)
-        month = min(max(month, 1), 12)
-
-        current_month = date(year, month, 1)
-        cal = calendar.Calendar(firstweekday=0)
-
-        scheduled_orders = (
-            Order.objects.select_related('customer')
-            .prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('raised_bed')))
-            .filter(pickup_at__year=year, pickup_at__month=month)
-            .order_by('pickup_at', 'customer__last_name')
-        )
-
-        entries_by_day_hour = {}
-        for order in scheduled_orders:
-            pickup_local = timezone.localtime(order.pickup_at)
-            order_day = pickup_local.date()
-            slot_hour = self._slot_hour(pickup_local.hour)
-            entries_by_day_hour.setdefault((order_day, slot_hour), []).append(
-                self._build_scheduled_order(order, pickup_local)
-            )
-
-        undated_orders = list(
-            Order.objects.select_related('customer')
-            .prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('raised_bed')))
-            .filter(ordered_at__year=year, ordered_at__month=month, pickup_at__isnull=True)
-            .exclude(status__in=[Order.Status.PICKED_UP, Order.Status.CANCELLED])
-            .order_by('ordered_at', 'customer__last_name')
-        )
-        for order in undated_orders:
-            ordered_local = timezone.localtime(order.ordered_at)
-            ordered_day = ordered_local.date()
-            slot_hour = self._slot_hour(ordered_local.hour)
-            entries_by_day_hour.setdefault((ordered_day, slot_hour), []).append(
-                self._build_unscheduled_order(order, ordered_local)
-            )
-
-        time_slots = [
-            {
-                'hour': hour,
-                'label': f'{hour}:00',
-            }
-            for hour in range(self.timeline_start_hour, self.timeline_end_hour + 1)
+        open_orders = self._open_orders_queryset()
+        month_revenue = self._month_revenue(today)
+        today_pickups = [
+            self._build_pickup_order_card(order, timezone.localtime(order.pickup_at), today)
+            for order in open_orders.filter(pickup_at__date=today).order_by('pickup_at', 'customer__last_name')
         ]
-
-        slot_max_entries = {slot['hour']: 0 for slot in time_slots}
-        month_days = []
-        for day_number in range(1, calendar.monthrange(year, month)[1] + 1):
-            row_date = date(year, month, day_number)
-            hourly_cells = []
-            has_entries = False
-            for slot in time_slots:
-                slot_entries = entries_by_day_hour.get((row_date, slot['hour']), [])
-                slot_entries = sorted(slot_entries, key=lambda item: item['sort_time'])
-                if slot_entries:
-                    has_entries = True
-                    slot_max_entries[slot['hour']] = max(slot_max_entries[slot['hour']], len(slot_entries))
-                hourly_cells.append(
-                    {
-                        'hour': slot['hour'],
-                        'entries': slot_entries,
-                    }
-                )
-
-            month_days.append(
-                {
-                    'date': row_date,
-                    'weekday_label': self._weekday_label(row_date),
-                    'is_today': row_date == today,
-                    'hourly_cells': hourly_cells,
-                    'has_content': has_entries,
-                }
-            )
-
-        for slot in time_slots:
-            max_entries = slot_max_entries[slot['hour']]
-            slot['has_entries'] = max_entries > 0
-            slot['width_rem'] = 3.4 if max_entries == 0 else min(7.8 * max_entries, 28)
-
-        previous_month = self._shift_month(current_month, -1)
-        next_month = self._shift_month(current_month, 1)
-        global_status_counts = self._status_counts(Order.objects.all())
+        upcoming_pickup_groups = self._build_upcoming_pickup_groups(open_orders, today)
+        undated_orders = [
+            self._build_undated_order_card(order)
+            for order in open_orders.filter(pickup_at__isnull=True).order_by('ordered_at', 'customer__last_name')
+        ]
+        global_status_counts = self._status_counts(open_orders)
 
         context.update(
             {
-                'calendar_days': month_days,
-                'current_month': current_month,
-                'previous_month': previous_month,
-                'next_month': next_month,
-                'time_slots': time_slots,
+                'today_label': format_czech_date(today),
+                'today_pickups': today_pickups,
+                'upcoming_pickup_groups': upcoming_pickup_groups,
+                'undated_orders': undated_orders,
                 'overview_metrics': [
+                    {
+                        'label': 'Dnes k vyzvednutí',
+                        'count': len(today_pickups),
+                    },
+                    {
+                        'label': 'Bez termínu',
+                        'count': len(undated_orders),
+                    },
                     {
                         'label': 'K vyřízení',
                         'count': self._open_count(global_status_counts),
                     },
                     {
-                        'label': 'Poptáno',
-                        'count': global_status_counts.get(Order.Status.ASKED, 0),
-                    },
-                    {
-                        'label': 'Objednáno',
-                        'count': global_status_counts.get(Order.Status.ORDERED, 0),
+                        'label': 'Obrat za měsíc',
+                        'count': self._price_label(month_revenue),
                     },
                 ],
             }
         )
         return context
 
-    def _build_scheduled_order(self, order, pickup_local):
+    def _open_orders_queryset(self):
+        return (
+            Order.objects.select_related('customer')
+            .prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('raised_bed')))
+            .exclude(status__in=[Order.Status.PICKED_UP, Order.Status.CANCELLED])
+        )
+
+    def _build_pickup_order_card(self, order, pickup_local, today):
         return {
             'id': order.id,
+            'edit_url': f'/modals/objednavky/{order.id}/upravit/',
+            'picked_up_url': f'/objednavky/{order.id}/vyzvednuto/',
+            'can_mark_picked_up': order.status not in [Order.Status.PICKED_UP, Order.Status.CANCELLED],
             'facebook_nickname': order.customer.facebook_nickname or order.customer.display_name,
             'customer_name': order.customer.display_name,
-            'meta_time': pickup_local.strftime('%H:%M'),
             'meta_label': 'Vyzvednutí',
+            'meta_value': pickup_local.strftime('%H:%M'),
+            'secondary_label': 'Objednáno',
+            'secondary_value': self._format_datetime_label(timezone.localtime(order.ordered_at)),
+            'pickup_day_label': self._pickup_group_label(pickup_local.date(), today),
             'status': order.get_status_display(),
             'status_code': order.status,
             'item_count': self._item_count(order),
             'total_price': self._price_label(order),
-            'sort_time': pickup_local.time(),
+            'items_preview': self._items_preview(order),
+            'note': order.note,
         }
 
-    def _build_unscheduled_order(self, order, ordered_local):
+    def _build_undated_order_card(self, order):
+        ordered_local = timezone.localtime(order.ordered_at)
         return {
             'id': order.id,
+            'edit_url': f'/modals/objednavky/{order.id}/upravit/',
+            'picked_up_url': f'/objednavky/{order.id}/vyzvednuto/',
+            'can_mark_picked_up': order.status not in [Order.Status.PICKED_UP, Order.Status.CANCELLED],
             'facebook_nickname': order.customer.facebook_nickname or order.customer.display_name,
             'customer_name': order.customer.display_name,
-            'meta_time': ordered_local.strftime('%H:%M'),
-            'meta_label': order.get_status_display(),
+            'meta_label': 'Objednáno',
+            'meta_value': self._format_datetime_label(ordered_local),
+            'secondary_label': 'Vyzvednutí',
+            'secondary_value': 'Bez termínu',
             'status': order.get_status_display(),
             'status_code': order.status,
             'item_count': self._item_count(order),
             'total_price': self._price_label(order),
-            'sort_time': ordered_local.time(),
+            'items_preview': self._items_preview(order),
+            'note': order.note,
+        }
+
+    def _build_upcoming_pickup_groups(self, queryset, today):
+        groups = []
+        current_group = None
+        for order in queryset.filter(pickup_at__date__gt=today).order_by('pickup_at', 'customer__last_name'):
+            pickup_local = timezone.localtime(order.pickup_at)
+            pickup_date = pickup_local.date()
+            if current_group is None or current_group['date'] != pickup_date:
+                current_group = {
+                    'date': pickup_date,
+                    'label': self._pickup_group_label(pickup_date, today),
+                    'date_display': format_czech_date(pickup_date),
+                    'orders': [],
+                }
+                groups.append(current_group)
+            current_group['orders'].append(self._build_pickup_order_card(order, pickup_local, today))
+        return groups
+
+    def _build_order_list_card(self, order):
+        ordered_local = timezone.localtime(order.ordered_at)
+        pickup_local = timezone.localtime(order.pickup_at) if order.pickup_at else None
+        return {
+            'id': order.id,
+            'edit_url': f'/modals/objednavky/{order.id}/upravit/',
+            'picked_up_url': f'/objednavky/{order.id}/vyzvednuto/',
+            'delete_url': f'/objednavky/{order.id}/smazat/',
+            'can_mark_picked_up': order.status not in [Order.Status.PICKED_UP, Order.Status.CANCELLED],
+            'facebook_nickname': order.customer.facebook_nickname or order.customer.display_name,
+            'customer_name': order.customer.display_name,
+            'meta_label': 'Objednáno',
+            'meta_value': self._format_datetime_label(ordered_local),
+            'secondary_label': 'Vyzvednutí',
+            'secondary_value': self._format_datetime_label(pickup_local) if pickup_local else 'Bez termínu',
+            'status': order.get_status_display(),
+            'status_code': order.status,
+            'item_count': self._item_count(order),
+            'total_price': self._price_label(order),
+            'items_preview': self._items_preview(order),
+            'note': order.note,
         }
 
     def _item_count(self, order):
         return sum(item.quantity for item in order.items.all())
 
+    def _items_preview(self, order):
+        items = list(order.items.all())
+        previews = [str(item.raised_bed) for item in items[:2]]
+        if not previews:
+            return 'Bez položek'
+        if len(items) > 2:
+            previews.append(f'+{len(items) - 2} další')
+        return ' • '.join(previews)
+
     def _price_label(self, order):
-        return f"{order.total_price:,.0f} Kč".replace(',', ' ')
+        total_value = order.total_price if hasattr(order, 'total_price') else order
+        return f"{total_value:,.0f} Kč".replace(',', ' ')
 
-    def _slot_hour(self, hour):
-        return min(max(hour, self.timeline_start_hour), self.timeline_end_hour)
+    def _month_revenue(self, today):
+        monthly_orders = (
+            Order.objects.prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('raised_bed')))
+            .filter(ordered_at__year=today.year, ordered_at__month=today.month)
+            .exclude(status=Order.Status.CANCELLED)
+        )
+        return sum((order.total_price for order in monthly_orders), start=0)
 
-    def _weekday_label(self, value):
-        return ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'][value.weekday()]
+    def _format_datetime_label(self, value):
+        return f"{format_czech_date(value.date())} {value.strftime('%H:%M')}"
 
-    def _parse_int(self, value, default):
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
-
-    def _shift_month(self, value, offset):
-        month_index = (value.month - 1) + offset
-        year = value.year + month_index // 12
-        month = month_index % 12 + 1
-        return date(year, month, 1)
-
-    def _build_status_summary(self, orders):
-        counts = {status: 0 for status, _label in Order.Status.choices}
-        for order in orders:
-            counts[order.status] += 1
-        return [
-            {
-                'code': status,
-                'label': label,
-                'count': counts[status],
-            }
-            for status, label in Order.Status.choices
-        ]
+    def _pickup_group_label(self, value, today):
+        if value == today:
+            return 'Dnes'
+        if value == today + timedelta(days=1):
+            return 'Zítra'
+        weekday_labels = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne']
+        return f"{weekday_labels[value.weekday()]} {format_czech_date(value)}"
 
     def _status_counts(self, queryset):
         return {
@@ -211,111 +199,72 @@ class HomePageView(TemplateView):
         return sum(status_counts.get(status, 0) for status in open_statuses)
 
 
-class OrderListView(TemplateView):
+class OrderListView(HomePageView):
     template_name = 'home/order_list.html'
 
-    SORT_OPTIONS = [
-        ('pickup_asc', 'Nejbližší vyzvednutí'),
-        ('pickup_desc', 'Nejpozdější vyzvednutí'),
-        ('ordered_desc', 'Nejnovější objednávky'),
-        ('ordered_asc', 'Nejstarší objednávky'),
-        ('customer_asc', 'Zákazník A-Z'),
-        ('status_asc', 'Stav'),
-    ]
-
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        search_query = self.request.GET.get('q', '').strip()
-        selected_status = self.request.GET.get('status', '').strip()
-        selected_city = self.request.GET.get('city', '').strip()
-        selected_sort = self.request.GET.get('sort', 'pickup_asc').strip() or 'pickup_asc'
-
+        context = TemplateView.get_context_data(self, **kwargs)
+        today = timezone.localdate()
         queryset = (
             Order.objects.select_related('customer')
             .prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('raised_bed')))
+            .all()
         )
 
-        if search_query:
+        search = self.request.GET.get('q', '').strip()
+        status_filter = self.request.GET.get('status', 'all')
+        pickup_filter = self.request.GET.get('pickup', 'all')
+
+        if search:
             queryset = queryset.filter(
-                Q(customer__first_name__icontains=search_query)
-                | Q(customer__last_name__icontains=search_query)
-                | Q(customer__facebook_nickname__icontains=search_query)
-                | Q(customer__phone__icontains=search_query)
-                | Q(customer__city__icontains=search_query)
-                | Q(note__icontains=search_query)
-                | Q(items__raised_bed__name__icontains=search_query)
-                | Q(items__raised_bed__dimensions__icontains=search_query)
-            ).distinct()
+                Q(customer__first_name__icontains=search)
+                | Q(customer__last_name__icontains=search)
+                | Q(customer__facebook_nickname__icontains=search)
+                | Q(customer__phone__icontains=search)
+                | Q(note__icontains=search)
+            )
 
-        valid_statuses = {status for status, _label in Order.Status.choices}
-        if selected_status in valid_statuses:
-            queryset = queryset.filter(status=selected_status)
+        if status_filter == 'open':
+            queryset = queryset.exclude(status__in=[Order.Status.PICKED_UP, Order.Status.CANCELLED])
+        elif status_filter != 'all' and status_filter in dict(Order.Status.choices):
+            queryset = queryset.filter(status=status_filter)
 
-        if selected_city:
-            queryset = queryset.filter(customer__city=selected_city)
+        if pickup_filter == 'today':
+            queryset = queryset.filter(pickup_at__date=today)
+        elif pickup_filter == 'with_date':
+            queryset = queryset.filter(pickup_at__isnull=False)
+        elif pickup_filter == 'without_date':
+            queryset = queryset.filter(pickup_at__isnull=True)
+        elif pickup_filter == 'month':
+            queryset = queryset.filter(pickup_at__year=today.year, pickup_at__month=today.month)
+        elif pickup_filter == 'overdue':
+            queryset = queryset.filter(pickup_at__date__lt=today).exclude(status__in=[Order.Status.PICKED_UP, Order.Status.CANCELLED])
 
-        queryset = self._apply_sort(queryset, selected_sort)
-        orders = list(queryset)
+        queryset = queryset.order_by('-updated_at', '-ordered_at')
 
         context.update(
             {
-                'orders': orders,
-                'status_summary': self._build_filtered_status_summary(orders),
-                'sort_options': self.SORT_OPTIONS,
-                'status_options': Order.Status.choices,
-                'city_options': self._city_options(),
-                'selected_status': selected_status,
-                'selected_city': selected_city,
-                'selected_sort': selected_sort,
-                'search_query': search_query,
-                'total_orders': len(orders),
-                'orders_with_pickup': sum(1 for order in orders if order.pickup_at),
-                'orders_without_pickup': sum(1 for order in orders if not order.pickup_at),
-                'open_orders': sum(
-                    1
-                    for order in orders
-                    if order.status in {
-                        Order.Status.ASKED,
-                        Order.Status.ORDERED,
-                        Order.Status.IN_PROGRESS,
-                        Order.Status.AWAITING_PICKUP,
-                    }
-                ),
+                'orders': [self._build_order_list_card(order) for order in queryset],
+                'search_query': search,
+                'selected_status': status_filter,
+                'selected_pickup': pickup_filter,
+                'status_options': [
+                    ('all', 'Všechny stavy'),
+                    ('open', 'Jen aktivní'),
+                    *Order.Status.choices,
+                ],
+                'pickup_options': [
+                    ('all', 'Všechny termíny'),
+                    ('today', 'Dnes k vyzvednutí'),
+                    ('with_date', 'Jen s termínem'),
+                    ('without_date', 'Bez termínu'),
+                    ('month', 'Termín tento měsíc'),
+                    ('overdue', 'Po termínu'),
+                ],
+                'order_count': queryset.count(),
             }
         )
         return context
-
-    def _city_options(self):
-        return list(
-            Customer.objects.exclude(city='')
-            .order_by('city')
-            .values_list('city', flat=True)
-            .distinct()
-        )
-
-    def _apply_sort(self, queryset, selected_sort):
-        sort_map = {
-            'pickup_asc': [F('pickup_at').asc(nulls_last=True), 'customer__last_name', 'customer__first_name'],
-            'pickup_desc': [F('pickup_at').desc(nulls_last=True), 'customer__last_name', 'customer__first_name'],
-            'ordered_desc': ['-ordered_at', 'customer__last_name', 'customer__first_name'],
-            'ordered_asc': ['ordered_at', 'customer__last_name', 'customer__first_name'],
-            'customer_asc': ['customer__last_name', 'customer__first_name', F('pickup_at').asc(nulls_last=True)],
-            'status_asc': ['status', F('pickup_at').asc(nulls_last=True), 'customer__last_name'],
-        }
-        return queryset.order_by(*sort_map.get(selected_sort, sort_map['pickup_asc']))
-
-    def _build_filtered_status_summary(self, orders):
-        counts = {status: 0 for status, _label in Order.Status.choices}
-        for order in orders:
-            counts[order.status] += 1
-        return [
-            {
-                'code': status,
-                'label': label,
-                'count': counts[status],
-            }
-            for status, label in Order.Status.choices
-        ]
 
 
 class OrderCreateView(TemplateView):
@@ -354,8 +303,10 @@ class OrderCreateView(TemplateView):
         if status_value:
             selected_status_label = dict(Order.Status.choices).get(status_value, '')
 
-        pickup_value = order_form['pickup_at'].value() or ''
-        pickup_display = str(pickup_value).replace('T', ' ') if pickup_value else ''
+        pickup_date_value = order_form['pickup_date'].value() or ''
+        pickup_time_value = order_form['pickup_time'].value() or ''
+        formatted_pickup_date = self._format_date_value(pickup_date_value)
+        pickup_display = f'{formatted_pickup_date} {pickup_time_value}'.strip() if formatted_pickup_date else ''
 
         context.update(
             {
@@ -373,6 +324,17 @@ class OrderCreateView(TemplateView):
             }
         )
         return context
+
+    def _format_date_value(self, value):
+        if not value:
+            return ''
+        for input_format in ['%Y-%m-%d', '%d.%m.%Y', '%d. %m. %Y']:
+            try:
+                parsed = datetime.strptime(str(value), input_format).date()
+                return format_czech_date(parsed)
+            except ValueError:
+                continue
+        return str(value)
 
     def _beds_payload(self):
         return [
@@ -443,6 +405,77 @@ class CustomerModalCreateView(View):
             for error in field_errors:
                 errors.append(f'{label}: {error}' if label else error)
         return errors
+
+
+class OrderModalUpdateView(View):
+    template_name = 'home/modals/order_edit_modal.html'
+
+    def get(self, request, pk, *args, **kwargs):
+        order = self._get_order(pk)
+        form = OrderForm(instance=order, prefix='order_edit')
+        self._apply_compact_schedule_attrs(form)
+        item_formset = OrderItemFormSet(instance=order, prefix='order_items_edit')
+        return render(request, self.template_name, self._get_context(order, form, item_formset))
+
+    def post(self, request, pk, *args, **kwargs):
+        order = self._get_order(pk)
+        form = OrderForm(request.POST, instance=order, prefix='order_edit')
+        self._apply_compact_schedule_attrs(form)
+        item_formset = OrderItemFormSet(request.POST, instance=order, prefix='order_items_edit')
+        if form.is_valid() and item_formset.is_valid():
+            form.save()
+            item_formset.save()
+            return JsonResponse({'success': True, 'message': 'Objednávka byla upravena.'})
+        return render(request, self.template_name, self._get_context(order, form, item_formset), status=400)
+
+    def _get_context(self, order, form, item_formset):
+        return {
+            'order': order,
+            'order_edit_form': form,
+            'order_item_formset': item_formset,
+            'order_item_modal_form': OrderItemForm(prefix='order_item_modal'),
+            'order_items': order.items.select_related('raised_bed').all(),
+        }
+
+    def _get_order(self, pk):
+        return get_object_or_404(
+            Order.objects.select_related('customer').prefetch_related(
+                Prefetch('items', queryset=OrderItem.objects.select_related('raised_bed'))
+            ),
+            pk=pk,
+        )
+
+    def _apply_compact_schedule_attrs(self, form):
+        field_attrs = {
+            'ordered_date': {'placeholder': 'Datum', 'aria-label': 'Datum objednávky'},
+            'ordered_time': {'placeholder': 'Čas', 'aria-label': 'Čas objednávky'},
+            'pickup_date': {'placeholder': 'Datum', 'aria-label': 'Datum vyzvednutí'},
+            'pickup_time': {'placeholder': 'Čas', 'aria-label': 'Čas vyzvednutí'},
+        }
+        for field_name, attrs in field_attrs.items():
+            form.fields[field_name].widget.attrs.update(attrs)
+
+
+class OrderMarkPickedUpView(View):
+    def post(self, request, pk, *args, **kwargs):
+        order = get_object_or_404(Order, pk=pk)
+        order.status = Order.Status.PICKED_UP
+        if order.pickup_at is None:
+            order.pickup_at = timezone.now()
+        order.save()
+        messages.success(request, 'Objednávka byla označena jako vyzvednutá.')
+        next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or 'home:index'
+        return redirect(next_url)
+
+
+class OrderDeleteView(View):
+    def post(self, request, pk, *args, **kwargs):
+        order = get_object_or_404(Order.objects.select_related('customer'), pk=pk)
+        customer_name = order.customer.display_name
+        order.delete()
+        messages.success(request, f'Objednávka pro {customer_name} byla smazána.')
+        next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or 'home:order-list'
+        return redirect(next_url)
 
 
 class RaisedBedModalCreateView(View):

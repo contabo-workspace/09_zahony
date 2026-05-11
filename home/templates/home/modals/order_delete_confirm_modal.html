@@ -1,0 +1,20 @@
+<div id="order-delete-confirm-modal" class="modal" aria-hidden="true">
+	<div class="modal-backdrop"></div>
+	<div class="modal-dialog modal-dialog-confirm">
+		<div class="modal-header">
+			<div>
+				<div class="section-label">Potvrzení</div>
+				<h3 class="modal-title modal-title-inline"><span class="ui-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 10v6" /><path d="M14 10v6" /></svg></span><span>Smazat objednávku</span></h3>
+			</div>
+			<button type="button" class="modal-close" data-order-delete-close aria-label="Zavřít modal">&times;</button>
+		</div>
+		<div class="modal-body modal-confirm-body">
+			<p class="modal-confirm-copy">Opravdu smazat celou objednávku pro <strong data-delete-customer-name>zákazníka</strong>?</p>
+			<p class="modal-confirm-note">Tato akce smaže i všechny položky objednávky a nejde vrátit zpět.</p>
+			<div class="modal-actions modal-actions-confirm">
+				<button type="button" class="button button-secondary" data-order-delete-close>Zrušit</button>
+				<button type="button" class="button button-primary button-danger" data-order-delete-submit><span class="ui-icon ui-icon-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 10v6" /><path d="M14 10v6" /></svg></span><span>Ano, smazat</span></button>
+			</div>
+		</div>
+	</div>
+</div>

@@ -1,10 +1,12 @@
 {% extends 'home/base.html' %}
 {% load static %}
 
-{% block title %}Kalendář zakázek | Evidence záhonů{% endblock %}
+{% block title %}Přehled objednávek | Evidence záhonů{% endblock %}
 
 {% block extra_css %}
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 	<link rel="stylesheet" href="{% static 'home/css/index.css' %}">
+	<link rel="stylesheet" href="{% static 'home/css/modals.css' %}">
 {% endblock %}
 
 {% block body_class %}page-home{% endblock %}
@@ -12,71 +14,158 @@
 {% block content %}
 	<section class="page-heading page-heading-calendar">
 		<div>
-			<h1>Kalendář</h1>
+			<h1>Přehled objednávek</h1>
 		</div>
 		<div class="overview-metrics overview-metrics-compact">
 			{% for metric in overview_metrics %}
 				<div class="metric-chip">
 					<span class="metric-label">{{ metric.label }}</span>
-					<strong class="metric-value">{{ metric.count }}</strong>
+					<strong class="metric-value{% if 'Kč' in metric.count|stringformat:'s' %} metric-value-money{% endif %}">{{ metric.count }}</strong>
 				</div>
 			{% endfor %}
 		</div>
 	</section>
 
-	<section class="calendar-shell app-panel">
-		<div class="calendar-head">
-			<h2>{{ current_month|date:"F Y" }}</h2>
-			<div class="month-nav">
-				<a href="?year={{ previous_month.year }}&month={{ previous_month.month }}" class="button button-ghost">Předchozí měsíc</a>
-				<a href="?year={{ next_month.year }}&month={{ next_month.month }}" class="button button-ghost">Další měsíc</a>
-			</div>
+	<section class="orders-dashboard">
+		<div class="orders-primary-column">
+			<section class="dashboard-panel dashboard-panel-today app-panel">
+				<div class="dashboard-panel-head">
+					<div>
+						<div class="section-label">Dnes</div>
+						<h2>K vyzvednutí {{ today_label }}</h2>
+					</div>
+				</div>
+				<div class="order-card-list">
+					{% for order in today_pickups %}
+						<article class="order-card order-card-clickable" data-order-edit-url="{{ order.edit_url }}" tabindex="0">
+							<div class="order-card-head">
+								<div>
+									<div class="order-card-name">{{ order.customer_name }}</div>
+									<div class="order-card-facebook">{{ order.facebook_nickname }}</div>
+								</div>
+								<div class="order-card-actions" data-card-action>
+									<span class="status-pill status-{{ order.status_code }}">{{ order.status }}</span>
+									{% if order.can_mark_picked_up %}
+										<form method="post" action="{{ order.picked_up_url }}" data-confirm-picked-up data-customer-name="{{ order.customer_name }}">
+											{% csrf_token %}
+											<input type="hidden" name="next" value="{{ request.get_full_path }}">
+											<button type="submit" class="button button-secondary button-small"><span class="ui-icon ui-icon-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span><span>Vyzvednuto</span></button>
+										</form>
+									{% endif %}
+								</div>
+							</div>
+							<div class="order-card-meta-grid">
+								<div><span>{{ order.meta_label }}</span><strong>{{ order.meta_value }}</strong></div>
+								<div><span>{{ order.secondary_label }}</span><strong>{{ order.secondary_value }}</strong></div>
+							</div>
+							<div class="order-card-summary">
+								<span>{{ order.item_count }} ks</span>
+								<strong>{{ order.total_price }}</strong>
+							</div>
+							<div class="order-card-items">{{ order.items_preview }}</div>
+							{% if order.note %}<div class="order-card-note">{{ order.note }}</div>{% endif %}
+						</article>
+					{% empty %}
+						<div class="dashboard-empty">Na dnešek není naplánované žádné vyzvednutí.</div>
+					{% endfor %}
+				</div>
+			</section>
+
+			<section class="dashboard-panel app-panel">
+				<div class="dashboard-panel-head">
+					<div>
+						<div class="section-label">Nejbližší termíny</div>
+						<h2>Nadcházející vyzvednutí</h2>
+					</div>
+				</div>
+				{% for group in upcoming_pickup_groups %}
+					<section class="pickup-group">
+						<header class="pickup-group-head">
+							<h3>{{ group.label }}</h3>
+							<span>{{ group.date_display }}</span>
+						</header>
+						<div class="order-card-list">
+							{% for order in group.orders %}
+								<article class="order-card order-card-compact order-card-clickable" data-order-edit-url="{{ order.edit_url }}" tabindex="0">
+									<div class="order-card-head">
+										<div>
+											<div class="order-card-name">{{ order.customer_name }}</div>
+											<div class="order-card-facebook">{{ order.facebook_nickname }}</div>
+										</div>
+										<div class="order-card-actions" data-card-action>
+											<span class="status-pill status-{{ order.status_code }}">{{ order.status }}</span>
+											{% if order.can_mark_picked_up %}
+												<form method="post" action="{{ order.picked_up_url }}" data-confirm-picked-up data-customer-name="{{ order.customer_name }}">
+													{% csrf_token %}
+													<input type="hidden" name="next" value="{{ request.get_full_path }}">
+													<button type="submit" class="button button-secondary button-small"><span class="ui-icon ui-icon-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span><span>Vyzvednuto</span></button>
+												</form>
+											{% endif %}
+										</div>
+									</div>
+									<div class="order-card-meta-grid">
+										<div><span>{{ order.meta_label }}</span><strong>{{ order.meta_value }}</strong></div>
+										<div><span>Položky</span><strong>{{ order.item_count }} ks</strong></div>
+									</div>
+									<div class="order-card-summary-inline">{{ order.items_preview }}<strong>{{ order.total_price }}</strong></div>
+								</article>
+							{% endfor %}
+						</div>
+					</section>
+				{% empty %}
+					<div class="dashboard-empty">Další vyzvednutí zatím nejsou naplánovaná.</div>
+				{% endfor %}
+			</section>
 		</div>
 
-		<div class="calendar-matrix-shell">
-			<table class="calendar-matrix">
-				<colgroup>
-					<col class="day-column-col">
-					{% for slot in time_slots %}
-						<col class="time-column{% if slot.has_entries %} has-entries{% else %} is-empty{% endif %}" style="width: {{ slot.width_rem }}rem;">
+		<aside class="orders-secondary-column">
+			<section class="dashboard-panel app-panel">
+				<div class="dashboard-panel-head">
+					<div>
+						<div class="section-label">Čeká na domluvu</div>
+						<h2>Bez termínu vyzvednutí</h2>
+					</div>
+				</div>
+				<div class="order-card-list">
+					{% for order in undated_orders %}
+						<article class="order-card order-card-undated order-card-clickable" data-order-edit-url="{{ order.edit_url }}" tabindex="0">
+							<div class="order-card-head">
+								<div>
+									<div class="order-card-name">{{ order.customer_name }}</div>
+									<div class="order-card-facebook">{{ order.facebook_nickname }}</div>
+								</div>
+								<div class="order-card-actions" data-card-action>
+									<span class="status-pill status-{{ order.status_code }}">{{ order.status }}</span>
+									{% if order.can_mark_picked_up %}
+										<form method="post" action="{{ order.picked_up_url }}" data-confirm-picked-up data-customer-name="{{ order.customer_name }}">
+											{% csrf_token %}
+											<input type="hidden" name="next" value="{{ request.get_full_path }}">
+											<button type="submit" class="button button-secondary button-small"><span class="ui-icon ui-icon-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span><span>Vyzvednuto</span></button>
+										</form>
+									{% endif %}
+								</div>
+							</div>
+							<div class="order-card-meta-grid">
+								<div><span>{{ order.meta_label }}</span><strong>{{ order.meta_value }}</strong></div>
+								<div><span>{{ order.secondary_label }}</span><strong>{{ order.secondary_value }}</strong></div>
+							</div>
+							<div class="order-card-summary-inline">{{ order.items_preview }}<strong>{{ order.total_price }}</strong></div>
+							{% if order.note %}<div class="order-card-note">{{ order.note }}</div>{% endif %}
+						</article>
+					{% empty %}
+						<div class="dashboard-empty">Všechny otevřené objednávky už mají termín vyzvednutí.</div>
 					{% endfor %}
-				</colgroup>
-				<thead>
-					<tr>
-						<th class="day-column">Den</th>
-						{% for slot in time_slots %}
-							<th>{{ slot.label }}</th>
-						{% endfor %}
-					</tr>
-				</thead>
-				<tbody>
-					{% for day in calendar_days %}
-						<tr class="calendar-row{% if day.is_today %} is-today{% endif %}{% if not day.has_content %} is-empty{% endif %}">
-							<th scope="row" class="calendar-day-label">
-								<strong>{{ day.date.day }}.</strong>
-								<span>{{ day.weekday_label }}</span>
-							</th>
-							{% for cell in day.hourly_cells %}
-								<td class="calendar-slot{% if cell.entries %} has-entry{% else %} is-empty{% endif %}">
-									<div class="calendar-slot-stack">
-									{% for entry in cell.entries %}
-										<article class="calendar-entry status-{{ entry.status_code }}">
-											<div class="calendar-entry-meta">{{ entry.meta_label }} {{ entry.meta_time }}</div>
-											<div class="calendar-entry-facebook">{{ entry.facebook_nickname }}</div>
-											<div class="calendar-entry-name">{{ entry.customer_name }}</div>
-											<div class="calendar-entry-summary">
-												<span>{{ entry.item_count }} ks</span>
-												<strong>{{ entry.total_price }}</strong>
-											</div>
-										</article>
-									{% endfor %}
-									</div>
-								</td>
-							{% endfor %}
-						</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-		</div>
+				</div>
+			</section>
+		</aside>
 	</section>
+
+	{% include 'home/modals/picked_up_confirm_modal.html' %}
+	<div id="order-dashboard-modal-root"></div>
+{% endblock %}
+
+{% block extra_js %}
+	<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+	<script src="https://npmcdn.com/flatpickr/dist/l10n/cs.js"></script>
+	<script src="{% static 'home/js/dashboard.js' %}"></script>
 {% endblock %}

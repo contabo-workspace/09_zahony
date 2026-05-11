@@ -9,11 +9,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const modals = Array.from(document.querySelectorAll('.modal'));
   const customerSelect = mainForm.querySelector('select[name="customer"]');
   const statusSelect = mainForm.querySelector('select[name="status"]');
-  const pickupInput = mainForm.querySelector('input[name="pickup_at"]');
+  const orderedDateInput = mainForm.querySelector('input[name="ordered_date"]');
+  const pickupDateInput = mainForm.querySelector('input[name="pickup_date"]');
+  const pickupTimeInput = mainForm.querySelector('input[name="pickup_time"]');
   const totalFormsInput = mainForm.querySelector('input[name="items-TOTAL_FORMS"]');
   const itemStorage = document.getElementById('order-items-storage');
   const itemsSummary = document.getElementById('order-items-summary');
   const itemsEmpty = document.getElementById('order-items-empty');
+  const itemsMinError = document.getElementById('order-items-min-error');
   const summaryItemsList = document.getElementById('summary-items-list');
   const summaryItemsEmpty = document.getElementById('summary-items-empty');
   const summaryCustomer = document.getElementById('summary-customer');
@@ -24,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const itemModalBed = itemModalForm?.querySelector('select[name="item_modal-raised_bed"]');
   const itemModalQuantity = itemModalForm?.querySelector('input[name="item_modal-quantity"]');
   const itemModalUnitPrice = itemModalForm?.querySelector('input[name="item_modal-unit_price"]');
+  const itemModalRaisedBedTrigger = itemModalForm?.querySelector('[data-open-raised-bed-from-item]');
+  let reopenItemModalAfterRaisedBed = false;
 
   const bedsPayloadElement = document.getElementById('beds-payload');
   const beds = new Map();
@@ -32,6 +37,36 @@ document.addEventListener('DOMContentLoaded', () => {
       beds.set(String(bed.id), bed);
     });
   }
+
+  const formatCzechDate = (value) => {
+    if (!value) {
+      return '';
+    }
+    const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (isoMatch) {
+      const [, year, month, day] = isoMatch;
+      return `${Number(day)}. ${Number(month)}. ${year}`;
+    }
+    return value;
+  };
+
+  const initDatePicker = (input) => {
+    if (!input || typeof window.flatpickr !== 'function') {
+      return;
+    }
+    window.flatpickr(input, {
+      locale: window.flatpickr.l10ns.cs,
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'j. n. Y',
+      appendTo: document.body,
+      allowInput: false,
+      disableMobile: true,
+    });
+  };
+
+  initDatePicker(orderedDateInput);
+  initDatePicker(pickupDateInput);
 
   const resolveModal = (target) => {
     if (!target) {
@@ -73,6 +108,21 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.querySelectorAll('[data-modal-close]').forEach((control) => {
       control.addEventListener('click', () => closeModal(modal));
     });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal(modal);
+      }
+    });
+  });
+
+  const raisedBedModal = resolveModal('raised-bed-modal');
+  const orderItemModal = resolveModal('order-item-modal');
+
+  itemModalRaisedBedTrigger?.addEventListener('click', () => {
+    reopenItemModalAfterRaisedBed = true;
+    closeModal(orderItemModal);
+    openModal(raisedBedModal);
   });
 
   document.addEventListener('keydown', (event) => {
@@ -123,8 +173,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (summaryStatus && statusSelect) {
       summaryStatus.textContent = statusSelect.selectedOptions[0]?.text?.trim() || 'Objednáno';
     }
-    if (summaryPickup && pickupInput) {
-      summaryPickup.textContent = pickupInput.value ? pickupInput.value.replace('T', ' ') : 'Bez termínu';
+    if (summaryPickup) {
+      const pickupDate = pickupDateInput?.value || '';
+      const pickupTime = pickupTimeInput?.value || '';
+      const formattedPickupDate = formatCzechDate(pickupDate);
+      summaryPickup.textContent = formattedPickupDate ? `${formattedPickupDate}${pickupTime ? ` ${pickupTime}` : ''}` : 'Bez termínu';
     }
   };
 
@@ -199,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const hasItems = items.length > 0;
     itemsEmpty?.classList.toggle('is-hidden', hasItems);
+    itemsMinError?.classList.toggle('is-hidden', hasItems);
     summaryItemsEmpty?.classList.toggle('is-hidden', hasItems);
 
     if (summaryTotal) {
@@ -236,6 +290,22 @@ document.addEventListener('DOMContentLoaded', () => {
     totalFormsInput.value = String(index + 1);
   };
 
+  const syncItemStorageForSubmit = () => {
+    if (!itemStorage || !totalFormsInput) {
+      return;
+    }
+
+    const items = activeItems().map((item) => ({
+      bedId: item.bedId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    }));
+
+    itemStorage.innerHTML = '';
+    totalFormsInput.value = '0';
+    items.forEach((item) => appendItemRow(item));
+  };
+
   itemsSummary?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-item-remove]');
     if (!button) {
@@ -251,7 +321,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   customerSelect?.addEventListener('change', updateSummaryHeader);
   statusSelect?.addEventListener('change', updateSummaryHeader);
-  pickupInput?.addEventListener('input', updateSummaryHeader);
+  pickupDateInput?.addEventListener('input', updateSummaryHeader);
+  pickupTimeInput?.addEventListener('input', updateSummaryHeader);
+
+  mainForm.addEventListener('submit', () => {
+    syncItemStorageForSubmit();
+  });
 
   const customerModalForm = document.getElementById('customer-modal-form');
   customerModalForm?.addEventListener('submit', async (event) => {
@@ -299,10 +374,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
       raisedBedModalForm.reset();
-      closeModal(resolveModal('raised-bed-modal'));
+      closeModal(raisedBedModal);
+      if (reopenItemModalAfterRaisedBed) {
+        reopenItemModalAfterRaisedBed = false;
+        openModal(orderItemModal);
+      }
     } catch (payload) {
       setModalErrors(raisedBedModalForm, payload.errors || ['Uložení záhonu se nepodařilo.']);
     }
+  });
+
+  raisedBedModal?.addEventListener('click', (event) => {
+    if (event.target === raisedBedModal && reopenItemModalAfterRaisedBed) {
+      reopenItemModalAfterRaisedBed = false;
+      openModal(orderItemModal);
+    }
+  });
+
+  raisedBedModal?.querySelectorAll('[data-modal-close]').forEach((control) => {
+    control.addEventListener('click', () => {
+      if (reopenItemModalAfterRaisedBed) {
+        reopenItemModalAfterRaisedBed = false;
+        openModal(orderItemModal);
+      }
+    });
   });
 
   itemModalBed?.addEventListener('change', () => {

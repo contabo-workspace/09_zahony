@@ -1,0 +1,36 @@
+<div class="modal" id="order-edit-item-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-order-item-modal-close></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="order-edit-item-modal-title">
+        <div class="modal-header">
+            <div>
+                <div class="section-label">Položka objednávky</div>
+                <h3 id="order-edit-item-modal-title" class="modal-title" data-order-item-modal-title>Přidání položky objednávky</h3>
+            </div>
+            <button type="button" class="modal-close" data-order-item-modal-close>&times;</button>
+        </div>
+        <form method="post" class="modal-form" id="order-edit-item-modal-form">
+            <div class="modal-errors" data-modal-errors></div>
+            <div class="field-grid modal-field-grid-order-item">
+                <div class="field-group field-group-wide{% if order_item_modal_form.raised_bed.errors %} has-error{% endif %}">
+                    <label for="{{ order_item_modal_form.raised_bed.id_for_label }}">{{ order_item_modal_form.raised_bed.label }}</label>
+                    {{ order_item_modal_form.raised_bed }}
+                </div>
+                <div class="field-group{% if order_item_modal_form.quantity.errors %} has-error{% endif %}">
+                    <label for="{{ order_item_modal_form.quantity.id_for_label }}">{{ order_item_modal_form.quantity.label }}</label>
+                    <div class="input-with-suffix">
+                        {{ order_item_modal_form.quantity }}
+                        <span class="input-suffix">ks</span>
+                    </div>
+                </div>
+                <div class="field-group{% if order_item_modal_form.unit_price.errors %} has-error{% endif %}">
+                    <label for="{{ order_item_modal_form.unit_price.id_for_label }}">{{ order_item_modal_form.unit_price.label }}</label>
+                    {{ order_item_modal_form.unit_price }}
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="button button-secondary" data-order-item-modal-close>Zavřít</button>
+                <button type="submit" class="button button-primary" data-order-item-modal-submit><span data-order-item-modal-submit-label>Přidat položku</span></button>
+            </div>
+        </form>
+    </div>
+</div>

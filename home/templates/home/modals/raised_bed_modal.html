@@ -1,6 +1,6 @@
 <div class="modal" id="raised-bed-modal" aria-hidden="true">
     <div class="modal-backdrop" data-modal-close></div>
-    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="raised-bed-modal-title">
+    <div class="modal-dialog modal-dialog-raised-bed" role="dialog" aria-modal="true" aria-labelledby="raised-bed-modal-title">
         <div class="modal-header">
             <div>
                 <div class="section-label">Nový záhon</div>
@@ -11,17 +11,37 @@
         <form method="post" class="modal-form" id="raised-bed-modal-form" action="{% url 'home:raised-bed-modal-create' %}">
             {% csrf_token %}
             <div class="modal-errors" data-modal-errors></div>
-            <div class="field-grid">
-                {% for field in raised_bed_form %}
-                    <div class="field-group{% if field.errors %} has-error{% endif %}">
-                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                    </div>
-                {% endfor %}
+            <div class="field-grid modal-field-grid-raised-bed">
+                <div class="field-group field-group-wide{% if raised_bed_form.name.errors %} has-error{% endif %}">
+                    <label for="{{ raised_bed_form.name.id_for_label }}">{{ raised_bed_form.name.label }}</label>
+                    {{ raised_bed_form.name }}
+                </div>
+                <div class="field-group{% if raised_bed_form.dimensions.errors %} has-error{% endif %}">
+                    <label for="{{ raised_bed_form.dimensions.id_for_label }}">{{ raised_bed_form.dimensions.label }}</label>
+                    {{ raised_bed_form.dimensions }}
+                </div>
+                <div class="field-group{% if raised_bed_form.base_price.errors %} has-error{% endif %}">
+                    <label for="{{ raised_bed_form.base_price.id_for_label }}">{{ raised_bed_form.base_price.label }}</label>
+                    {{ raised_bed_form.base_price }}
+                </div>
+                <div class="field-group field-group-wide{% if raised_bed_form.description.errors %} has-error{% endif %}">
+                    <label for="{{ raised_bed_form.description.id_for_label }}">{{ raised_bed_form.description.label }}</label>
+                    {{ raised_bed_form.description }}
+                </div>
+                <div class="field-group field-group-wide{% if raised_bed_form.is_active.errors %} has-error{% endif %}">
+                    <label class="checkbox-card" for="{{ raised_bed_form.is_active.id_for_label }}">
+                        {{ raised_bed_form.is_active }}
+                        <span class="checkbox-card-indicator" aria-hidden="true"></span>
+                        <span class="checkbox-card-content">
+                            <span class="checkbox-card-title">{{ raised_bed_form.is_active.label }}</span>
+                            <span class="checkbox-card-note">Záhon bude ihned dostupný při přidávání položek objednávky.</span>
+                        </span>
+                    </label>
+                </div>
             </div>
             <div class="modal-actions">
                 <button type="button" class="button button-secondary" data-modal-close>Zavřít</button>
-                <button type="submit" class="button button-primary">Uložit záhon</button>
+                <button type="submit" class="button button-primary">Uložit</button>
             </div>
         </form>
     </div>

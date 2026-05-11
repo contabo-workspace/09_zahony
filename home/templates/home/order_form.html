@@ -4,6 +4,7 @@
 {% block title %}Nová objednávka | Evidence záhonů{% endblock %}
 
 {% block extra_css %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="{% static 'home/css/order_form.css' %}">
     <link rel="stylesheet" href="{% static 'home/css/modals.css' %}">
 {% endblock %}
@@ -21,20 +22,13 @@
         {% csrf_token %}
 
         <section class="order-main-column">
-            <div class="form-section app-panel">
-                <div class="section-header">
-                    <div>
-                        <div class="section-label">Zákazník</div>
-                        <h2>Komu objednávka patří</h2>
-                    </div>
-                    <button type="button" class="button button-ghost" data-modal-open="customer-modal">Přidat zákazníka</button>
-                </div>
+            <div class="form-section app-panel order-items-panel">
                 <div class="field-grid field-grid-customer">
                     <div class="field-group field-group-wide{% if order_form.customer.errors %} has-error{% endif %}">
                         <label for="{{ order_form.customer.id_for_label }}">{{ order_form.customer.label }}</label>
-                        <div class="input-with-action">
+                        <div class="input-with-action input-with-action-inline">
                             {{ order_form.customer }}
-                            <button type="button" class="button button-secondary button-inline" data-modal-open="customer-modal">Nový zákazník</button>
+                            <button type="button" class="button button-ghost button-nowrap" data-modal-open="customer-modal">Přidat zákazníka</button>
                         </div>
                         {% for error in order_form.customer.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
                     </div>
@@ -42,24 +36,38 @@
             </div>
 
             <div class="form-section app-panel">
-                <div class="section-header">
-                    <div>
-                        <div class="section-label">Termíny a stav</div>
-                        <h2>Kdy bylo objednáno a kdy se vyzvedává</h2>
+                <div class="field-grid field-grid-schedule">
+                    <div class="schedule-group">
+                        <div class="field-group-title">Objednávka</div>
+                        <div class="schedule-group-fields">
+                            <div class="field-group{% if order_form.ordered_date.errors %} has-error{% endif %}">
+                                <label for="{{ order_form.ordered_date.id_for_label }}">{{ order_form.ordered_date.label }}</label>
+                                {{ order_form.ordered_date }}
+                                {% for error in order_form.ordered_date.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                            </div>
+                            <div class="field-group{% if order_form.ordered_time.errors %} has-error{% endif %}">
+                                <label for="{{ order_form.ordered_time.id_for_label }}">{{ order_form.ordered_time.label }}</label>
+                                {{ order_form.ordered_time }}
+                                {% for error in order_form.ordered_time.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="field-grid">
-                    <div class="field-group{% if order_form.ordered_at.errors %} has-error{% endif %}">
-                        <label for="{{ order_form.ordered_at.id_for_label }}">{{ order_form.ordered_at.label }}</label>
-                        {{ order_form.ordered_at }}
-                        {% for error in order_form.ordered_at.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    <div class="schedule-group">
+                        <div class="field-group-title">Vyzvednutí</div>
+                        <div class="schedule-group-fields">
+                            <div class="field-group{% if order_form.pickup_date.errors %} has-error{% endif %}">
+                                <label for="{{ order_form.pickup_date.id_for_label }}">{{ order_form.pickup_date.label }}</label>
+                                {{ order_form.pickup_date }}
+                                {% for error in order_form.pickup_date.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                            </div>
+                            <div class="field-group{% if order_form.pickup_time.errors %} has-error{% endif %}">
+                                <label for="{{ order_form.pickup_time.id_for_label }}">{{ order_form.pickup_time.label }}</label>
+                                {{ order_form.pickup_time }}
+                                {% for error in order_form.pickup_time.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                            </div>
+                        </div>
                     </div>
-                    <div class="field-group{% if order_form.pickup_at.errors %} has-error{% endif %}">
-                        <label for="{{ order_form.pickup_at.id_for_label }}">{{ order_form.pickup_at.label }}</label>
-                        {{ order_form.pickup_at }}
-                        {% for error in order_form.pickup_at.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
-                    </div>
-                    <div class="field-group{% if order_form.status.errors %} has-error{% endif %}">
+                    <div class="field-group field-group-status{% if order_form.status.errors %} has-error{% endif %}">
                         <label for="{{ order_form.status.id_for_label }}">{{ order_form.status.label }}</label>
                         {{ order_form.status }}
                         {% for error in order_form.status.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
@@ -76,16 +84,14 @@
                 <div class="section-header">
                     <div>
                         <div class="section-label">Položky objednávky</div>
-                        <h2>Jaké záhony a v jakém množství</h2>
                     </div>
                     <div class="section-actions">
-                        <button type="button" class="button button-secondary" data-modal-open="raised-bed-modal">Přidat záhon</button>
                         <button type="button" class="button button-primary" data-modal-open="order-item-modal">Přidat položku</button>
                     </div>
                 </div>
 
                 {% if item_formset.non_form_errors %}
-                    <div class="form-error-box">
+                    <div class="form-error-box" id="order-items-min-error">
                         {% for error in item_formset.non_form_errors %}
                             <p>{{ error }}</p>
                         {% endfor %}
@@ -102,8 +108,8 @@
                     </div>
                 {% endif %}
 
-                <div id="order-items-empty" class="empty-items{% if item_rows %} is-hidden{% endif %}">
-                    Zatím není přidaná žádná položka. Otevři modal a přidej první záhon.
+                <div id="order-items-empty" class="empty-items{% if item_rows or item_formset.non_form_errors %} is-hidden{% endif %}">
+                    Zatím není přidaná žádná položka.
                 </div>
 
                 <div id="order-items-summary" class="items-summary-list"></div>
@@ -126,7 +132,6 @@
         <aside class="order-sidebar-column">
             <section class="form-section app-panel summary-panel">
                 <div class="section-label">Souhrn</div>
-                <h2>Přehled před uložením</h2>
                 <div class="summary-list">
                     <div class="summary-row">
                         <span>Zákazník</span>
@@ -162,5 +167,7 @@
 {% endblock %}
 
 {% block extra_js %}
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/cs.js"></script>
     <script src="{% static 'home/js/order_form.js' %}"></script>
 {% endblock %}

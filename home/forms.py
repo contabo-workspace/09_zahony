@@ -1,11 +1,18 @@
+from datetime import datetime
+
 from django import forms
-from django.forms import inlineformset_factory
+from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.utils import timezone
 
 from .models import Customer, Order, OrderItem, RaisedBed
 
 
-DATETIME_INPUT_FORMATS = ['%Y-%m-%dT%H:%M']
+DATE_INPUT_FORMATS = ['%Y-%m-%d', '%d.%m.%Y', '%d. %m. %Y']
+TIME_INPUT_FORMATS = ['%H:%M']
+
+
+def format_czech_date(date_value):
+    return f'{date_value.day}. {date_value.month}. {date_value.year}'
 
 
 class StyledFormMixin:
@@ -24,7 +31,6 @@ class StyledFormMixin:
             else:
                 css_class = self.input_class
             widget.attrs['class'] = f'{existing} {css_class}'.strip()
-            widget.attrs.setdefault('placeholder', field.label)
 
 
 class CustomerForm(StyledFormMixin, forms.ModelForm):
@@ -54,21 +60,44 @@ class RaisedBedForm(StyledFormMixin, forms.ModelForm):
 
 
 class OrderForm(StyledFormMixin, forms.ModelForm):
-    ordered_at = forms.DateTimeField(
-        label='Objednáno dne',
-        input_formats=DATETIME_INPUT_FORMATS,
-        widget=forms.DateTimeInput(format=DATETIME_INPUT_FORMATS[0], attrs={'type': 'datetime-local'}),
+    ordered_date = forms.DateField(
+        label='Datum',
+        input_formats=DATE_INPUT_FORMATS,
+        widget=forms.DateInput(
+            format=DATE_INPUT_FORMATS[0],
+            attrs={'type': 'text', 'autocomplete': 'off'},
+        ),
     )
-    pickup_at = forms.DateTimeField(
-        label='Vyzvednutí dne a čas',
+    ordered_time = forms.TimeField(
+        label='Čas',
+        input_formats=TIME_INPUT_FORMATS,
+        widget=forms.TimeInput(
+            format=TIME_INPUT_FORMATS[0],
+            attrs={'type': 'text', 'inputmode': 'numeric'},
+        ),
+    )
+    pickup_date = forms.DateField(
+        label='Datum',
         required=False,
-        input_formats=DATETIME_INPUT_FORMATS,
-        widget=forms.DateTimeInput(format=DATETIME_INPUT_FORMATS[0], attrs={'type': 'datetime-local'}),
+        input_formats=DATE_INPUT_FORMATS,
+        widget=forms.DateInput(
+            format=DATE_INPUT_FORMATS[0],
+            attrs={'type': 'text', 'autocomplete': 'off'},
+        ),
+    )
+    pickup_time = forms.TimeField(
+        label='Čas',
+        required=False,
+        input_formats=TIME_INPUT_FORMATS,
+        widget=forms.TimeInput(
+            format=TIME_INPUT_FORMATS[0],
+            attrs={'type': 'text', 'inputmode': 'numeric'},
+        ),
     )
 
     class Meta:
         model = Order
-        fields = ['customer', 'ordered_at', 'pickup_at', 'status', 'note']
+        fields = ['customer', 'status', 'note']
         widgets = {
             'note': forms.Textarea(attrs={'rows': 4}),
         }
@@ -78,9 +107,56 @@ class OrderForm(StyledFormMixin, forms.ModelForm):
         self.fields['customer'].queryset = Customer.objects.order_by('last_name', 'first_name')
         self.fields['status'].choices = Order.Status.choices
         self.apply_widget_classes()
+
+        ordered_at = self.initial.get('ordered_at') or getattr(self.instance, 'ordered_at', None)
+        pickup_at = self.initial.get('pickup_at') or getattr(self.instance, 'pickup_at', None)
+
         if not self.is_bound:
             now = timezone.localtime(timezone.now())
-            self.initial.setdefault('ordered_at', now.strftime(DATETIME_INPUT_FORMATS[0]))
+            ordered_local = timezone.localtime(ordered_at) if ordered_at else now
+            pickup_local = timezone.localtime(pickup_at) if pickup_at else None
+            self.initial.setdefault('ordered_date', ordered_local.strftime(DATE_INPUT_FORMATS[0]))
+            self.initial.setdefault('ordered_time', ordered_local.strftime(TIME_INPUT_FORMATS[0]))
+            if pickup_local:
+                self.initial.setdefault('pickup_date', pickup_local.strftime(DATE_INPUT_FORMATS[0]))
+                self.initial.setdefault('pickup_time', pickup_local.strftime(TIME_INPUT_FORMATS[0]))
+
+    def clean(self):
+        cleaned_data = super().clean()
+        ordered_date = cleaned_data.get('ordered_date')
+        ordered_time = cleaned_data.get('ordered_time')
+        pickup_date = cleaned_data.get('pickup_date')
+        pickup_time = cleaned_data.get('pickup_time')
+
+        if ordered_date and ordered_time:
+            cleaned_data['ordered_at'] = self._combine_to_local_datetime(ordered_date, ordered_time)
+
+        if pickup_date and pickup_time:
+            cleaned_data['pickup_at'] = self._combine_to_local_datetime(pickup_date, pickup_time)
+        elif pickup_date or pickup_time:
+            message = 'Datum a čas vyzvednutí je potřeba vyplnit společně.'
+            self.add_error('pickup_date', message)
+            self.add_error('pickup_time', message)
+            cleaned_data['pickup_at'] = None
+        else:
+            cleaned_data['pickup_at'] = None
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        order = super().save(commit=False)
+        order.ordered_at = self.cleaned_data['ordered_at']
+        order.pickup_at = self.cleaned_data.get('pickup_at')
+        if commit:
+            order.save()
+            self.save_m2m()
+        return order
+
+    def _combine_to_local_datetime(self, date_value, time_value):
+        naive_value = datetime.combine(date_value, time_value)
+        if timezone.is_naive(naive_value):
+            return timezone.make_aware(naive_value, timezone.get_current_timezone())
+        return naive_value
 
 
 class OrderItemForm(StyledFormMixin, forms.ModelForm):
@@ -95,12 +171,22 @@ class OrderItemForm(StyledFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['raised_bed'].queryset = RaisedBed.objects.filter(is_active=True).order_by('name', 'dimensions')
+        self.fields['unit_price'].localize = False
+        self.fields['unit_price'].widget.is_localized = False
         self.apply_widget_classes()
+
+
+class BaseOrderItemFormSet(BaseInlineFormSet):
+    default_error_messages = {
+        **BaseInlineFormSet.default_error_messages,
+        'too_few_forms': 'Přidejte alespoň jednu položku.',
+    }
 
 
 OrderItemFormSet = inlineformset_factory(
     Order,
     OrderItem,
+    formset=BaseOrderItemFormSet,
     form=OrderItemForm,
     extra=0,
     can_delete=True,
