@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from django.contrib import messages
 from django.db.models import Count, Prefetch, Q
 from django.http import JsonResponse
-from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
@@ -11,36 +10,6 @@ from django.views.generic import TemplateView
 
 from .forms import CustomerForm, OrderForm, OrderItemForm, OrderItemFormSet, RaisedBedForm, format_czech_date
 from .models import Customer, Order, OrderItem, RaisedBed
-
-
-def flatten_form_errors(form):
-    errors = []
-    for field_name, field_errors in form.errors.items():
-        label = form.fields.get(field_name).label if field_name in form.fields else ''
-        for error in field_errors:
-            errors.append(f'{label}: {error}' if label else error)
-    return errors
-
-
-def format_price_label(value):
-    total_value = value.total_price if hasattr(value, 'total_price') else value
-    return f"{total_value:,.0f} Kč".replace(',', ' ')
-
-
-def format_datetime_label(value):
-    return f"{format_czech_date(value.date())} {value.strftime('%H:%M')}"
-
-
-def format_pickup_time_label(value):
-    return value.strftime('%H:%M') if value else 'Čas neuveden'
-
-
-def format_pickup_schedule_label(order):
-    if not order.pickup_date:
-        return 'Bez termínu'
-    if not order.pickup_time:
-        return f'{format_czech_date(order.pickup_date)} čas neuveden'
-    return f'{format_czech_date(order.pickup_date)} {order.pickup_time.strftime("%H:%M")}'
 
 
 class HomePageView(TemplateView):
@@ -52,12 +21,12 @@ class HomePageView(TemplateView):
         open_orders = self._open_orders_queryset()
         month_revenue = self._month_revenue(today)
         today_pickups = [
-            self._build_order_card(order, card_type='pickup', today=today)
+            self._build_pickup_order_card(order, today)
             for order in open_orders.filter(pickup_date=today).order_by('pickup_time', 'customer__last_name')
         ]
         upcoming_pickup_groups = self._build_upcoming_pickup_groups(open_orders, today)
         undated_orders = [
-            self._build_order_card(order, card_type='undated', today=today)
+            self._build_undated_order_card(order)
             for order in open_orders.filter(pickup_date__isnull=True).order_by('ordered_at', 'customer__last_name')
         ]
         global_status_counts = self._status_counts(open_orders)
@@ -97,49 +66,47 @@ class HomePageView(TemplateView):
             .exclude(status__in=[Order.Status.PICKED_UP, Order.Status.CANCELLED])
         )
 
-    def _build_order_card(self, order, card_type, today=None, include_delete=False):
-        ordered_local = timezone.localtime(order.ordered_at)
-        primary_name = order.customer.facebook_nickname or order.customer.display_name
-        secondary_name = order.customer.display_name if order.customer.facebook_nickname else ''
-        card = {
+    def _build_pickup_order_card(self, order, today):
+        return {
             'id': order.id,
-            'edit_url': reverse('home:order-modal-update', args=[order.id]),
-            'picked_up_url': reverse('home:order-mark-picked-up', args=[order.id]),
-            'delete_url': reverse('home:order-delete', args=[order.id]) if include_delete else '',
+            'edit_url': f'/modals/objednavky/{order.id}/upravit/',
+            'picked_up_url': f'/objednavky/{order.id}/vyzvednuto/',
             'can_mark_picked_up': order.status not in [Order.Status.PICKED_UP, Order.Status.CANCELLED],
-            'primary_name': primary_name,
-            'secondary_name': secondary_name,
+            'facebook_nickname': order.customer.facebook_nickname or order.customer.display_name,
+            'customer_name': order.customer.display_name,
+            'meta_label': 'Vyzvednutí',
+            'meta_value': self._format_pickup_time_label(order.pickup_time),
+            'secondary_label': 'Objednáno',
+            'secondary_value': self._format_datetime_label(timezone.localtime(order.ordered_at)),
+            'pickup_day_label': self._pickup_group_label(order.pickup_date, today),
             'status': order.get_status_display(),
             'status_code': order.status,
-            'item_count': order.item_count,
-            'total_price': format_price_label(order),
+            'item_count': self._item_count(order),
+            'total_price': self._price_label(order),
             'items_preview': self._items_preview(order),
             'note': order.note,
-            'show_delete': include_delete,
-            'meta_items': [],
         }
 
-        if card_type == 'pickup':
-            card['meta_items'] = [
-                {'label': 'Vyzvednutí', 'value': format_pickup_time_label(order.pickup_time)},
-                {'label': 'Objednáno', 'value': format_datetime_label(ordered_local)},
-            ]
-            if today and order.pickup_date:
-                card['pickup_day_label'] = self._pickup_group_label(order.pickup_date, today)
-            return card
-
-        if card_type == 'undated':
-            card['meta_items'] = [
-                {'label': 'Objednáno', 'value': format_datetime_label(ordered_local)},
-                {'label': 'Vyzvednutí', 'value': 'Bez termínu'},
-            ]
-            return card
-
-        card['meta_items'] = [
-            {'label': 'Objednáno', 'value': format_datetime_label(ordered_local)},
-            {'label': 'Vyzvednutí', 'value': format_pickup_schedule_label(order)},
-        ]
-        return card
+    def _build_undated_order_card(self, order):
+        ordered_local = timezone.localtime(order.ordered_at)
+        return {
+            'id': order.id,
+            'edit_url': f'/modals/objednavky/{order.id}/upravit/',
+            'picked_up_url': f'/objednavky/{order.id}/vyzvednuto/',
+            'can_mark_picked_up': order.status not in [Order.Status.PICKED_UP, Order.Status.CANCELLED],
+            'facebook_nickname': order.customer.facebook_nickname or order.customer.display_name,
+            'customer_name': order.customer.display_name,
+            'meta_label': 'Objednáno',
+            'meta_value': self._format_datetime_label(ordered_local),
+            'secondary_label': 'Vyzvednutí',
+            'secondary_value': 'Bez termínu',
+            'status': order.get_status_display(),
+            'status_code': order.status,
+            'item_count': self._item_count(order),
+            'total_price': self._price_label(order),
+            'items_preview': self._items_preview(order),
+            'note': order.note,
+        }
 
     def _build_upcoming_pickup_groups(self, queryset, today):
         groups = []
@@ -154,11 +121,33 @@ class HomePageView(TemplateView):
                     'orders': [],
                 }
                 groups.append(current_group)
-            current_group['orders'].append(self._build_order_card(order, card_type='pickup', today=today))
+            current_group['orders'].append(self._build_pickup_order_card(order, today))
         return groups
 
     def _build_order_list_card(self, order):
-        return self._build_order_card(order, card_type='list', include_delete=True)
+        ordered_local = timezone.localtime(order.ordered_at)
+        return {
+            'id': order.id,
+            'edit_url': f'/modals/objednavky/{order.id}/upravit/',
+            'picked_up_url': f'/objednavky/{order.id}/vyzvednuto/',
+            'delete_url': f'/objednavky/{order.id}/smazat/',
+            'can_mark_picked_up': order.status not in [Order.Status.PICKED_UP, Order.Status.CANCELLED],
+            'facebook_nickname': order.customer.facebook_nickname or order.customer.display_name,
+            'customer_name': order.customer.display_name,
+            'meta_label': 'Objednáno',
+            'meta_value': self._format_datetime_label(ordered_local),
+            'secondary_label': 'Vyzvednutí',
+            'secondary_value': self._format_pickup_schedule_label(order),
+            'status': order.get_status_display(),
+            'status_code': order.status,
+            'item_count': self._item_count(order),
+            'total_price': self._price_label(order),
+            'items_preview': self._items_preview(order),
+            'note': order.note,
+        }
+
+    def _item_count(self, order):
+        return sum(item.quantity for item in order.items.all())
 
     def _items_preview(self, order):
         items = list(order.items.all())
@@ -168,6 +157,10 @@ class HomePageView(TemplateView):
         if len(items) > 2:
             previews.append(f'+{len(items) - 2} další')
         return ' • '.join(previews)
+
+    def _price_label(self, order):
+        total_value = order.total_price if hasattr(order, 'total_price') else order
+        return f"{total_value:,.0f} Kč".replace(',', ' ')
 
     def _month_revenue(self, today):
         monthly_orders = (
@@ -179,6 +172,19 @@ class HomePageView(TemplateView):
             )
         )
         return sum((order.total_price for order in monthly_orders), start=0)
+
+    def _format_datetime_label(self, value):
+        return f"{format_czech_date(value.date())} {value.strftime('%H:%M')}"
+
+    def _format_pickup_time_label(self, value):
+        return value.strftime('%H:%M') if value else 'Čas neuveden'
+
+    def _format_pickup_schedule_label(self, order):
+        if not order.pickup_date:
+            return 'Bez termínu'
+        if not order.pickup_time:
+            return f'{format_czech_date(order.pickup_date)} Čas neuveden'
+        return f'{format_czech_date(order.pickup_date)} {order.pickup_time.strftime("%H:%M")}'
 
     def _pickup_group_label(self, value, today):
         if value == today:
@@ -311,10 +317,7 @@ class OrderCreateView(TemplateView):
         pickup_date_value = order_form['pickup_date'].value() or ''
         pickup_time_value = order_form['pickup_time'].value() or ''
         formatted_pickup_date = self._format_date_value(pickup_date_value)
-        if formatted_pickup_date:
-            pickup_display = f'{formatted_pickup_date} {pickup_time_value}'.strip() if pickup_time_value else f'{formatted_pickup_date} čas neuveden'
-        else:
-            pickup_display = ''
+        pickup_display = f'{formatted_pickup_date} {pickup_time_value}'.strip() if formatted_pickup_date else ''
 
         context.update(
             {
@@ -404,7 +407,15 @@ class CustomerModalCreateView(View):
                     }
                 }
             )
-        return JsonResponse({'errors': flatten_form_errors(form)}, status=400)
+        return JsonResponse({'errors': self._flatten_errors(form)}, status=400)
+
+    def _flatten_errors(self, form):
+        errors = []
+        for field_name, field_errors in form.errors.items():
+            label = form.fields.get(field_name).label if field_name in form.fields else ''
+            for error in field_errors:
+                errors.append(f'{label}: {error}' if label else error)
+        return errors
 
 
 class OrderModalUpdateView(View):
@@ -460,7 +471,7 @@ class OrderMarkPickedUpView(View):
     def post(self, request, pk, *args, **kwargs):
         order = get_object_or_404(Order, pk=pk)
         order.mark_picked_up()
-        order.save(update_fields=['status', 'pickup_date', 'pickup_time', 'picked_up_at', 'updated_at'])
+        order.save()
         messages.success(request, 'Objednávka byla označena jako vyzvednutá.')
         next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or 'home:index'
         return redirect(next_url)
@@ -490,4 +501,12 @@ class RaisedBedModalCreateView(View):
                     }
                 }
             )
-        return JsonResponse({'errors': flatten_form_errors(form)}, status=400)
+        return JsonResponse({'errors': self._flatten_errors(form)}, status=400)
+
+    def _flatten_errors(self, form):
+        errors = []
+        for field_name, field_errors in form.errors.items():
+            label = form.fields.get(field_name).label if field_name in form.fields else ''
+            for error in field_errors:
+                errors.append(f'{label}: {error}' if label else error)
+        return errors
