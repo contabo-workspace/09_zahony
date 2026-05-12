@@ -25,8 +25,8 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'customer', 'status', 'ordered_at', 'pickup_at', 'get_total_price')
-    list_filter = ('status', 'pickup_at', 'ordered_at')
+    list_display = ('id', 'customer', 'status', 'ordered_at', 'pickup_date', 'pickup_time', 'picked_up_at', 'get_total_price')
+    list_filter = ('status', 'pickup_date', 'picked_up_at', 'ordered_at')
     search_fields = (
         'customer__first_name',
         'customer__last_name',
@@ -34,7 +34,7 @@ class OrderAdmin(admin.ModelAdmin):
         'customer__phone',
         'note',
     )
-    date_hierarchy = 'pickup_at'
+    date_hierarchy = 'pickup_date'
     autocomplete_fields = ('customer',)
     inlines = [OrderItemInline]
 

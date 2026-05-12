@@ -1,0 +1,143 @@
+.dashboard-empty {
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(255, 251, 245, 0.92);
+  border: 1px dashed rgba(185, 150, 114, 0.8);
+  color: var(--text-soft);
+}
+
+.order-card-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.order-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.94);
+  border: 1px solid rgba(219, 199, 175, 0.75);
+  box-shadow: 0 10px 22px rgba(95, 63, 34, 0.05);
+}
+
+.order-card-compact,
+.order-card-undated {
+  gap: 0.65rem;
+}
+
+.order-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.order-card-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+}
+
+.order-card-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.order-card-actions form {
+  margin: 0;
+}
+
+.button-icon {
+  min-width: 2.2rem;
+  padding-inline: 0.6rem;
+}
+
+.button-icon-danger {
+  color: var(--danger);
+  border-color: rgba(169, 74, 53, 0.35);
+  background: rgba(244, 215, 208, 0.52);
+}
+
+.button-icon-danger:hover,
+.button-icon-danger:focus-visible {
+  background: rgba(244, 215, 208, 0.9);
+  color: #8e3522;
+}
+
+.button-small {
+  min-height: 2.2rem;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.88rem;
+}
+
+.order-card-clickable {
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.order-card-clickable:hover {
+  border-color: rgba(198, 93, 58, 0.32);
+  background: rgba(255, 249, 241, 0.96);
+  box-shadow: 0 14px 28px rgba(95, 63, 34, 0.09);
+}
+
+.order-card-name {
+  font-family: 'Fraunces', serif;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.order-card-facebook {
+  margin-top: 0.25rem;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.order-card-meta-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.order-card-meta-grid span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.order-card-meta-grid strong {
+  display: block;
+  margin-top: 0.18rem;
+  font-size: 1rem;
+}
+
+.order-card-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.order-card-summary strong {
+  white-space: nowrap;
+}
+
+.order-card-items,
+.order-card-note {
+  color: var(--text-soft);
+}
+
+.order-card-note {
+  padding-top: 0.2rem;
+  border-top: 1px solid rgba(219, 199, 175, 0.55);
+}

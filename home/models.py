@@ -54,7 +54,9 @@ class Order(models.Model):
 
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='orders', verbose_name='Zákazník')
     ordered_at = models.DateTimeField('Objednáno dne', default=timezone.now)
-    pickup_at = models.DateTimeField('Vyzvednutí dne a čas', blank=True, null=True)
+    pickup_date = models.DateField('Datum vyzvednutí', blank=True, null=True)
+    pickup_time = models.TimeField('Čas vyzvednutí', blank=True, null=True)
+    picked_up_at = models.DateTimeField('Skutečně vyzvednuto', blank=True, null=True)
     status = models.CharField('Stav', max_length=20, choices=Status.choices, default=Status.ORDERED)
     note = models.TextField('Poznámka k objednávce', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -63,7 +65,7 @@ class Order(models.Model):
     class Meta:
         verbose_name = 'Objednávka'
         verbose_name_plural = 'Objednávky'
-        ordering = ['pickup_at', 'customer__last_name']
+        ordering = ['pickup_date', 'pickup_time', 'customer__last_name']
 
     def __str__(self):
         return f'Objednávka #{self.pk} - {self.customer}'
@@ -71,6 +73,22 @@ class Order(models.Model):
     @property
     def total_price(self):
         return sum((item.line_total for item in self.items.all()), Decimal('0.00'))
+
+    @property
+    def item_count(self):
+        return sum(item.quantity for item in self.items.all())
+
+    @property
+    def has_pickup_schedule(self):
+        return self.pickup_date is not None
+
+    def mark_picked_up(self, when=None):
+        pickup_moment = timezone.localtime(when or timezone.now())
+        self.status = self.Status.PICKED_UP
+        self.picked_up_at = pickup_moment
+        if self.pickup_date is None:
+            self.pickup_date = pickup_moment.date()
+            self.pickup_time = pickup_moment.time().replace(second=0, microsecond=0)
 
 
 class OrderItem(models.Model):

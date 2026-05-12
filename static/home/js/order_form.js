@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const body = document.body;
+  const { closeModal, formatCzechDate, initDatePicker, openModal, postModalForm, resolveModal, setModalErrors } = window.HomeApp.utils;
   const mainForm = document.getElementById('order-create-form');
   if (!mainForm) {
     return;
@@ -38,65 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const formatCzechDate = (value) => {
-    if (!value) {
-      return '';
-    }
-    const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-    if (isoMatch) {
-      const [, year, month, day] = isoMatch;
-      return `${Number(day)}. ${Number(month)}. ${year}`;
-    }
-    return value;
-  };
-
-  const initDatePicker = (input) => {
-    if (!input || typeof window.flatpickr !== 'function') {
-      return;
-    }
-    window.flatpickr(input, {
-      locale: window.flatpickr.l10ns.cs,
-      dateFormat: 'Y-m-d',
-      altInput: true,
-      altFormat: 'j. n. Y',
-      appendTo: document.body,
-      allowInput: false,
-      disableMobile: true,
-    });
-  };
-
   initDatePicker(orderedDateInput);
   initDatePicker(pickupDateInput);
-
-  const resolveModal = (target) => {
-    if (!target) {
-      return null;
-    }
-    if (target.startsWith('#')) {
-      return document.querySelector(target);
-    }
-    return document.getElementById(target) || document.querySelector(`[data-modal-name="${target}"]`);
-  };
-
-  const closeModal = (modal) => {
-    if (!modal) {
-      return;
-    }
-    modal.classList.remove('is-open');
-    modal.setAttribute('aria-hidden', 'true');
-    if (!document.querySelector('.modal.is-open')) {
-      body.classList.remove('modal-open');
-    }
-  };
-
-  const openModal = (modal) => {
-    if (!modal) {
-      return;
-    }
-    modal.classList.add('is-open');
-    modal.setAttribute('aria-hidden', 'false');
-    body.classList.add('modal-open');
-  };
 
   document.querySelectorAll('[data-modal-open]').forEach((trigger) => {
     trigger.addEventListener('click', () => {
@@ -131,41 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  const setModalErrors = (form, errors) => {
-    const box = form.querySelector('[data-modal-errors]');
-    if (!box) {
-      return;
-    }
-    box.innerHTML = '';
-    if (!errors?.length) {
-      return;
-    }
-    const list = document.createElement('ul');
-    list.className = 'errorlist';
-    errors.forEach((error) => {
-      const item = document.createElement('li');
-      item.textContent = error;
-      list.appendChild(item);
-    });
-    box.appendChild(list);
-  };
-
-  const postModalForm = async (form) => {
-    const response = await fetch(form.action, {
-      method: 'POST',
-      body: new FormData(form),
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-CSRFToken': csrfToken,
-      },
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw payload;
-    }
-    return payload;
-  };
-
   const updateSummaryHeader = () => {
     if (summaryCustomer && customerSelect) {
       summaryCustomer.textContent = customerSelect.selectedOptions[0]?.text?.trim() || 'Nevybrán';
@@ -177,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const pickupDate = pickupDateInput?.value || '';
       const pickupTime = pickupTimeInput?.value || '';
       const formattedPickupDate = formatCzechDate(pickupDate);
-      summaryPickup.textContent = formattedPickupDate ? `${formattedPickupDate}${pickupTime ? ` ${pickupTime}` : ''}` : 'Bez termínu';
+      summaryPickup.textContent = formattedPickupDate ? `${formattedPickupDate}${pickupTime ? ` ${pickupTime}` : ' čas neuveden'}` : 'Bez termínu';
     }
   };
 
@@ -332,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
   customerModalForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
-      const payload = await postModalForm(customerModalForm);
+      const payload = await postModalForm(customerModalForm, csrfToken);
       setModalErrors(customerModalForm, []);
       if (customerSelect && payload.customer) {
         const option = new Option(payload.customer.label, payload.customer.id, true, true);
@@ -361,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
   raisedBedModalForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
-      const payload = await postModalForm(raisedBedModalForm);
+      const payload = await postModalForm(raisedBedModalForm, csrfToken);
       setModalErrors(raisedBedModalForm, []);
       if (payload.raised_bed) {
         beds.set(String(payload.raised_bed.id), payload.raised_bed);

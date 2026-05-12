@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const { initDatePicker, isInteractiveTarget, setModalErrors, syncBodyScrollLock } = window.HomeApp.utils;
   const modalRoot = document.getElementById('order-dashboard-modal-root');
   const confirmModal = document.getElementById('picked-up-confirm-modal');
   const deleteConfirmModal = document.getElementById('order-delete-confirm-modal');
@@ -8,49 +9,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const body = document.body;
   let pendingPickedUpForm = null;
+  let pendingPickedUpCheckbox = null;
   let pendingDeleteForm = null;
 
-  const syncBodyScrollLock = () => {
-    body.classList.toggle('modal-open', Boolean(document.querySelector('.modal.is-open')));
-  };
-
-  const initDatePicker = (input) => {
-    if (!input || typeof window.flatpickr !== 'function') {
-      return;
-    }
-    window.flatpickr(input, {
-      locale: window.flatpickr.l10ns.cs,
-      dateFormat: 'Y-m-d',
-      altInput: true,
-      altFormat: 'j. n. Y',
-      appendTo: document.body,
-      allowInput: false,
-      disableMobile: true,
-    });
-  };
-
-  const setModalErrors = (form, errors) => {
-    const box = form?.querySelector('[data-modal-errors]');
-    if (!box) {
-      return;
-    }
-
-    box.innerHTML = '';
-    if (!errors?.length) {
-      return;
-    }
-
-    const list = document.createElement('ul');
-    list.className = 'errorlist';
-    errors.forEach((error) => {
-      const item = document.createElement('li');
-      item.textContent = error;
-      list.appendChild(item);
-    });
-    box.appendChild(list);
-  };
-
-  const closeModal = () => {
+  const closeModalContent = () => {
     modalRoot.innerHTML = '';
     syncBodyScrollLock();
   };
@@ -63,6 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     confirmModal.classList.remove('is-open');
     confirmModal.setAttribute('aria-hidden', 'true');
     pendingPickedUpForm = null;
+    if (pendingPickedUpCheckbox) {
+      pendingPickedUpCheckbox.checked = false;
+    }
+    pendingPickedUpCheckbox = null;
     syncBodyScrollLock();
   };
 
@@ -77,14 +43,14 @@ document.addEventListener('DOMContentLoaded', () => {
     syncBodyScrollLock();
   };
 
-  const openConfirmModal = (form) => {
+  const openConfirmModal = (form, checkbox) => {
     if (!confirmModal) {
-      form.dataset.confirmed = 'true';
-      form.requestSubmit();
+      form.submit();
       return;
     }
 
     pendingPickedUpForm = form;
+    pendingPickedUpCheckbox = checkbox;
     const customerTarget = confirmModal.querySelector('[data-confirm-customer-name]');
     if (customerTarget) {
       customerTarget.textContent = form.dataset.customerName || 'tohoto zákazníka';
@@ -356,12 +322,12 @@ document.addEventListener('DOMContentLoaded', () => {
     bindOrderItemEditor(modal);
 
     modal.querySelectorAll('[data-order-edit-close]').forEach((control) => {
-      control.addEventListener('click', closeModal);
+      control.addEventListener('click', closeModalContent);
     });
 
     modal.addEventListener('click', (event) => {
       if (event.target === modal) {
-        closeModal();
+        closeModalContent();
       }
     });
 
@@ -398,20 +364,23 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const bindPickedUpConfirmForms = () => {
-    document.querySelectorAll('form[data-confirm-picked-up]').forEach((form) => {
+    document.querySelectorAll('form[data-confirm-picked-up-toggle]').forEach((form) => {
       if (form.dataset.confirmBound === 'true') {
         return;
       }
 
+      const checkbox = form.querySelector('[data-picked-up-checkbox]');
+      if (!checkbox) {
+        return;
+      }
+
       form.dataset.confirmBound = 'true';
-      form.addEventListener('submit', (event) => {
-        if (form.dataset.confirmed === 'true') {
-          delete form.dataset.confirmed;
+      checkbox.addEventListener('change', () => {
+        if (!checkbox.checked) {
           return;
         }
 
-        event.preventDefault();
-        openConfirmModal(form);
+        openConfirmModal(form, checkbox);
       });
     });
   };
@@ -457,9 +426,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const formToSubmit = pendingPickedUpForm;
+      const checkboxToKeep = pendingPickedUpCheckbox;
+      pendingPickedUpCheckbox = null;
       closeConfirmModal();
-      formToSubmit.dataset.confirmed = 'true';
-      formToSubmit.requestSubmit();
+      if (checkboxToKeep) {
+        checkboxToKeep.checked = true;
+      }
+      formToSubmit.submit();
     });
   };
 
@@ -511,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      closeModal();
+      closeModalContent();
     }
   });
 
@@ -522,14 +495,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     card.addEventListener('click', (event) => {
-      if (event.target.closest('[data-card-action], button, form, a, input, select, textarea')) {
+      if (isInteractiveTarget(event.target)) {
         return;
       }
       openOrderModal(url);
     });
 
     card.addEventListener('keydown', (event) => {
-      if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('[data-card-action], button, form, a, input, select, textarea')) {
+      if ((event.key === 'Enter' || event.key === ' ') && !isInteractiveTarget(event.target)) {
         event.preventDefault();
         openOrderModal(url);
       }

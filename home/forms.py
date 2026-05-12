@@ -109,17 +109,18 @@ class OrderForm(StyledFormMixin, forms.ModelForm):
         self.apply_widget_classes()
 
         ordered_at = self.initial.get('ordered_at') or getattr(self.instance, 'ordered_at', None)
-        pickup_at = self.initial.get('pickup_at') or getattr(self.instance, 'pickup_at', None)
+        pickup_date = self.initial.get('pickup_date') or getattr(self.instance, 'pickup_date', None)
+        pickup_time = self.initial.get('pickup_time') or getattr(self.instance, 'pickup_time', None)
 
         if not self.is_bound:
             now = timezone.localtime(timezone.now())
             ordered_local = timezone.localtime(ordered_at) if ordered_at else now
-            pickup_local = timezone.localtime(pickup_at) if pickup_at else None
             self.initial.setdefault('ordered_date', ordered_local.strftime(DATE_INPUT_FORMATS[0]))
             self.initial.setdefault('ordered_time', ordered_local.strftime(TIME_INPUT_FORMATS[0]))
-            if pickup_local:
-                self.initial.setdefault('pickup_date', pickup_local.strftime(DATE_INPUT_FORMATS[0]))
-                self.initial.setdefault('pickup_time', pickup_local.strftime(TIME_INPUT_FORMATS[0]))
+            if pickup_date:
+                self.initial.setdefault('pickup_date', pickup_date.strftime(DATE_INPUT_FORMATS[0]))
+            if pickup_time:
+                self.initial.setdefault('pickup_time', pickup_time.strftime(TIME_INPUT_FORMATS[0]))
 
     def clean(self):
         cleaned_data = super().clean()
@@ -131,22 +132,18 @@ class OrderForm(StyledFormMixin, forms.ModelForm):
         if ordered_date and ordered_time:
             cleaned_data['ordered_at'] = self._combine_to_local_datetime(ordered_date, ordered_time)
 
-        if pickup_date and pickup_time:
-            cleaned_data['pickup_at'] = self._combine_to_local_datetime(pickup_date, pickup_time)
-        elif pickup_date or pickup_time:
-            message = 'Datum a čas vyzvednutí je potřeba vyplnit společně.'
+        if pickup_time and not pickup_date:
+            message = 'Nejdřív vyplň datum vyzvednutí.'
             self.add_error('pickup_date', message)
             self.add_error('pickup_time', message)
-            cleaned_data['pickup_at'] = None
-        else:
-            cleaned_data['pickup_at'] = None
 
         return cleaned_data
 
     def save(self, commit=True):
         order = super().save(commit=False)
         order.ordered_at = self.cleaned_data['ordered_at']
-        order.pickup_at = self.cleaned_data.get('pickup_at')
+        order.pickup_date = self.cleaned_data.get('pickup_date')
+        order.pickup_time = self.cleaned_data.get('pickup_time')
         if commit:
             order.save()
             self.save_m2m()

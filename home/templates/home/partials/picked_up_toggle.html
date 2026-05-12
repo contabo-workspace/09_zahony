@@ -1,0 +1,13 @@
+{% if order.can_mark_picked_up %}
+    <form method="post" action="{{ order.picked_up_url }}" data-confirm-picked-up-toggle data-customer-name="{{ order.primary_name }}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <label class="checkbox-card checkbox-card-compact">
+            <input type="checkbox" data-picked-up-checkbox>
+            <span class="checkbox-card-indicator" aria-hidden="true"></span>
+            <span class="checkbox-card-content">
+                <span class="checkbox-card-title">Vyzvednuto</span>
+            </span>
+        </label>
+    </form>
+{% endif %}

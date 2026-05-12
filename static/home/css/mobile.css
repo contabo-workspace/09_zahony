@@ -111,7 +111,6 @@
 
   .order-card-head,
   .order-card-summary,
-  .order-card-summary-inline,
   .pickup-group-head,
   .order-list-toolbar-actions {
     flex-direction: column;
