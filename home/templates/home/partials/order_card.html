@@ -1,14 +1,18 @@
 <article class="order-card{% if extra_classes %} {{ extra_classes }}{% endif %} order-card-clickable" data-order-edit-url="{{ order.edit_url }}" tabindex="0">
     <div class="order-card-head">
         <div>
-            <div class="order-card-name">{{ order.primary_name }}</div>
-            {% if order.secondary_name %}<div class="order-card-facebook">{{ order.secondary_name }}</div>{% endif %}
+            {% if order.customer_name %}
+                <div class="order-card-name">{{ order.customer_name }}</div>
+            {% else %}
+                <div class="order-card-name">{{ order.primary_name }}</div>
+            {% endif %}
+            {% if order.facebook_nickname and order.facebook_nickname != order.customer_name %}<div class="order-card-facebook">{{ order.facebook_nickname }}</div>{% elif order.secondary_name %}<div class="order-card-facebook">{{ order.secondary_name }}</div>{% endif %}
         </div>
         <div class="order-card-actions" data-card-action>
             <span class="status-pill status-{{ order.status_code }}">{{ order.status }}</span>
             {% include 'home/partials/picked_up_toggle.html' with order=order %}
-            {% if order.show_delete %}
-                <form method="post" action="{{ order.delete_url }}" data-confirm-order-delete data-customer-name="{{ order.primary_name }}">
+            {% if order.delete_url or order.show_delete %}
+                <form method="post" action="{{ order.delete_url }}" data-confirm-order-delete data-customer-name="{% if order.customer_name %}{{ order.customer_name }}{% else %}{{ order.primary_name }}{% endif %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                     <button type="submit" class="button button-secondary button-small button-icon button-icon-danger" aria-label="Smazat objednávku"><span class="ui-icon ui-icon-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 10v6" /><path d="M14 10v6" /></svg></span></button>
@@ -17,9 +21,14 @@
         </div>
     </div>
     <div class="order-card-meta-grid">
-        {% for meta_item in order.meta_items %}
-            <div><span>{{ meta_item.label }}</span><strong>{{ meta_item.value }}</strong></div>
-        {% endfor %}
+        {% if order.meta_items %}
+            {% for meta_item in order.meta_items %}
+                <div><span>{{ meta_item.label }}</span><strong>{{ meta_item.value }}</strong></div>
+            {% endfor %}
+        {% else %}
+            <div><span>{{ order.meta_label }}</span><strong>{{ order.meta_value }}</strong></div>
+            <div><span>{{ order.secondary_label }}</span><strong>{{ order.secondary_value }}</strong></div>
+        {% endif %}
     </div>
     <div class="order-card-summary">
         <span>{{ order.item_count }} ks</span>
